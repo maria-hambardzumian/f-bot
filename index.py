@@ -20,7 +20,7 @@ from telegram import Bot, User, Chat, Message, InputFile
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 NUMBER1 = os.getenv("NUMBER1")
 NUMBER2 = os.getenv("NUMBER2")
-CHAT_ID = os.getenv("CHAT_ID")  # Optional: or hardcode your Telegram ID here
+CHAT_ID = os.getenv("CHAT_ID", "7283053073")  # Optional: or hardcode your Telegram ID here
 
 bot = Bot(token=TOKEN)
 
