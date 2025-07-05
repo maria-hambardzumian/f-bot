@@ -24,9 +24,22 @@ NUMBER2 = os.getenv("NUMBER2", "")
 class ScheduledUpdate:
     def __init__(self, bot_instance, chat_id):
         self.effective_chat = type('obj', (object,), {'id' : chat_id})() # Mock effective_chat
-        self.message = type('obj', (object,), {'reply_text' : lambda text: asyncio.create_task(bot_instance.send_message(chat_id=chat_id, text=text)),
-                                                'reply_photo' : lambda photo, caption: asyncio.create_task(bot_instance.send_photo(chat_id=chat_id, photo=photo, caption=caption))
-                                               })()
+        self.message = self._MockMessage(bot_instance, chat_id) # Instantiate the mock message
+
+    class _MockMessage: # Define a nested class for the mock message
+        def __init__(self, bot_instance, chat_id):
+            self.bot_instance = bot_instance
+            self.chat_id = chat_id
+
+        async def reply_text(self, text, **kwargs):
+            """Mocks the reply_text method for scheduled runs."""
+            # Use bot_instance to send the message
+            await self.bot_instance.send_message(chat_id=self.chat_id, text=text, **kwargs)
+
+        async def reply_photo(self, photo, caption=None, **kwargs):
+            """Mocks the reply_photo method for scheduled runs."""
+            # Use bot_instance to send the photo
+            await self.bot_instance.send_photo(chat_id=self.chat_id, photo=photo, caption=caption, **kwargs)
 
 class ScheduledContext:
     # This might need to be more elaborate depending on what your handlers expect from context
@@ -38,11 +51,12 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update: # Check if it's a regular Telegram update
         await update.message.reply_text("Opening Chrome...")
     else: # This is for scheduled runs where `update` is mocked
-        # You'll need a way to get the chat_id for scheduled messages
-        # For simplicity, let's assume you've set a chat ID as an environment variable
         scheduled_chat_id = os.getenv("TELEGRAM_SCHEDULE_CHAT_ID")
         if scheduled_chat_id:
-            await Bot(TOKEN).send_message(chat_id=scheduled_chat_id, text="[Scheduled Check] Opening Chrome...")
+            # We already have a bot_instance in ScheduledUpdate, so no need to create a new one here.
+            # The mocked reply_text will use the bot_instance provided to ScheduledUpdate.
+            # This line will now call the mocked reply_text
+            await update.message.reply_text("[Scheduled Check] Opening Chrome...")
         else:
             print("Warning: TELEGRAM_SCHEDULE_CHAT_ID not set for scheduled run.")
 
@@ -168,18 +182,17 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         bio = io.BytesIO(screenshot)
                         bio.name = "valid_date.png"
 
-                        if update: # Reply to specific update if it's a command
+                        if update:
                             await update.message.reply_photo(
                                 photo=bio,
                                 caption=f"Առաջին հասանելի օրն է՝ {aria_label}"
                             )
-                        else: # Send to scheduled chat ID if it's a scheduled run
-                            scheduled_chat_id = os.getenv("TELEGRAM_SCHEDULE_CHAT_ID")
-                            if scheduled_chat_id:
-                                bot_instance = Bot(TOKEN)
-                                await bot_instance.send_photo(chat_id=scheduled_chat_id, photo=bio, caption=f"[Scheduled] Առաջին հասանելի օրն է՝ {aria_label}")
-                            else:
-                                print(f"Warning: No chat ID for scheduled photo reply for {aria_label}.")
+                        else:
+                            # This now uses the mocked reply_photo method provided by ScheduledUpdate
+                            await update.message.reply_photo(
+                                photo=bio,
+                                caption=f"[Scheduled] Առաջին հասանելի օրն է՝ {aria_label}"
+                            )
                         return
 
                 if found_next_month_day:
@@ -197,12 +210,8 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if update:
                     await update.message.reply_text("Չհաջողվեց գտնել ազատ օր 😕")
                 else:
-                    scheduled_chat_id = os.getenv("TELEGRAM_SCHEDULE_CHAT_ID")
-                    if scheduled_chat_id:
-                        bot_instance = Bot(TOKEN)
-                        await bot_instance.send_message(chat_id=scheduled_chat_id, text="[Scheduled] Չհաջողվեց գտնել ազատ օր 😕")
-                    else:
-                        print("Warning: No chat ID for scheduled failure message.")
+                    # This now uses the mocked reply_text method provided by ScheduledUpdate
+                    await update.message.reply_text("[Scheduled] Չհաջողվեց գտնել ազատ օր 😕")
                 break
 
         png_bytes = driver.get_screenshot_as_png()
@@ -212,10 +221,8 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if update:
             await update.message.reply_photo(photo=bio, caption="Screenshot after background request.")
         else:
-            scheduled_chat_id = os.getenv("TELEGRAM_SCHEDULE_CHAT_ID")
-            if scheduled_chat_id:
-                bot_instance = Bot(TOKEN)
-                await bot_instance.send_photo(chat_id=scheduled_chat_id, photo=bio, caption="[Scheduled] Screenshot after background request.")
+            # This now uses the mocked reply_photo method provided by ScheduledUpdate
+            await update.message.reply_photo(photo=bio, caption="[Scheduled] Screenshot after background request.")
 
 
     except Exception as e:
@@ -223,12 +230,8 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if update:
             await update.message.reply_text(error_message)
         else:
-            scheduled_chat_id = os.getenv("TELEGRAM_SCHEDULE_CHAT_ID")
-            if scheduled_chat_id:
-                bot_instance = Bot(TOKEN)
-                await bot_instance.send_message(chat_id=scheduled_chat_id, text=f"[Scheduled] {error_message}")
-            else:
-                print(f"Warning: No chat ID for scheduled error message: {error_message}")
+            # This now uses the mocked reply_text method provided by ScheduledUpdate
+            await update.message.reply_text(f"[Scheduled] {error_message}")
 
 
     finally:
@@ -239,32 +242,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def run_scheduled_check():
     """Function to run check for scheduled events."""
-    # Create mock update and context for scheduled runs
-    # You NEED to set TELEGRAM_SCHEDULE_CHAT_ID as a GitHub Secret/Env Var
     scheduled_chat_id = os.getenv("TELEGRAM_SCHEDULE_CHAT_ID")
     if not scheduled_chat_id:
         print("Error: TELEGRAM_SCHEDULE_CHAT_ID environment variable is not set. Cannot send scheduled messages.")
         return
 
-    # Initialize a temporary bot instance to send messages for scheduled runs
-    # This uses a simple Bot object to send messages without the full Application.
-    # This assumes the bot token is available.
-    bot_instance = Bot(TOKEN)
-
-    # Create mock update and context objects
+    bot_instance = Bot(TOKEN) # Create a single bot instance for this scheduled run
     mock_update = ScheduledUpdate(bot_instance, scheduled_chat_id)
-    mock_context = ScheduledContext() # No specific context needed for this use case
+    mock_context = ScheduledContext()
 
     await check(mock_update, mock_context)
 
 
 if __name__ == '__main__':
-    # Check for a specific argument to decide if it's a scheduled run
     if "--scheduled-check" in sys.argv:
         print("Running scheduled check...")
         asyncio.run(run_scheduled_check())
     else:
-        # Normal Telegram bot polling for interactive commands
         app = ApplicationBuilder().token(TOKEN).build()
 
         app.add_handler(CommandHandler("start", start))
