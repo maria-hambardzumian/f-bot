@@ -1,7 +1,7 @@
 name: Run Telegram Bot
 
 on:
-  workflow_dispatch:  # You can run it manually from GitHub UI
+  workflow_dispatch:
 
 jobs:
   run-bot:
@@ -26,22 +26,22 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: 🧰 Install Google Chrome (stable)
+      - name: 🧰 Install Google Chrome (latest stable)
         run: |
           wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo apt install -y ./google-chrome-stable_current_amd64.deb
+          google-chrome --version
 
-      - name: 🧰 Install ChromeDriver (compatible version)
+      - name: 🧰 Install matching ChromeDriver
         run: |
-          CHROMEDRIVER_VERSION=117.0.5938.92
-          wget -O chromedriver.zip "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip"
+          CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+' | head -1)
+          echo "Detected Chrome version: $CHROME_VERSION"
+          DRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION")
+          echo "Matching ChromeDriver version: $DRIVER_VERSION"
+          wget -O chromedriver.zip "https://chromedriver.storage.googleapis.com/${DRIVER_VERSION}/chromedriver_linux64.zip"
           unzip chromedriver.zip
           sudo mv chromedriver /usr/bin/chromedriver
           sudo chmod +x /usr/bin/chromedriver
-
-      - name: ✅ Verify Chrome and ChromeDriver versions
-        run: |
-          google-chrome --version
           chromedriver --version
 
       - name: ▶️ Run Telegram bot
