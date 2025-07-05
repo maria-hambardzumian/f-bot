@@ -1,45 +1,46 @@
-name: Run Telegram Bot
+name: Deploy Telegram Bot
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
 
 jobs:
-  run-bot:
+  build:
     runs-on: ubuntu-latest
 
+    env:
+      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+      NUMBER1: ${{ secrets.NUMBER1 }}
+      NUMBER2: ${{ secrets.NUMBER2 }}
+
     steps:
-      - name: 📥 Checkout repository
+      - name: 📥 Checkout code
         uses: actions/checkout@v3
-
-      - name: 🧱 Install fixed Chrome & ChromeDriver versions
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wget unzip curl
-
-          # Install Chrome 114.0.5735.133
-          wget https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_114.0.5735.133-1_amd64.deb
-          sudo apt install -y ./google-chrome-stable_114.0.5735.133-1_amd64.deb
-          google-chrome --version
-
-          # Install ChromeDriver 114.0.5735.90
-          wget https://chromedriver.storage.googleapis.com/114.0.5735.90/chromedriver_linux64.zip
-          unzip chromedriver_linux64.zip
-          sudo mv chromedriver /usr/local/bin/
-          sudo chmod +x /usr/local/bin/chromedriver
-          chromedriver --version
 
       - name: 🐍 Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.10'
 
-      - name: 📦 Install Python dependencies
-        run: pip install -r requirements.txt
+      - name: 📦 Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: 🤖 Run Telegram Bot
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          NUMBER1: ${{ secrets.NUMBER1 }}
-          NUMBER2: ${{ secrets.NUMBER2 }}
+      - name: 🧰 Install Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip
+          wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo apt install -y ./google-chrome-stable_current_amd64.deb
+
+      - name: 🧰 Install ChromeDriver
+        run: |
+          CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+')
+          wget -N "https://chromedriver.storage.googleapis.com/$(curl -s https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION)/chromedriver_linux64.zip" -O chromedriver.zip
+          unzip chromedriver.zip
+          sudo mv chromedriver /usr/bin/chromedriver
+          sudo chmod +x /usr/bin/chromedriver
+
+      - name: ▶️ Run bot
         run: python bot.py
