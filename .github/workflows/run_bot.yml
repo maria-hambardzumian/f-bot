@@ -45,4 +45,4 @@ jobs:
           chromedriver --version
 
       - name: ▶️ Run Telegram bot
-        run: python bot.py
+        run: python index.py
