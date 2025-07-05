@@ -1,44 +1,63 @@
-name: Run Selenium Scraper
+name: Deploy Telegram Bot with Selenium
 
 on:
-  # schedule: 
-  #   - cron: '0 15 * * *' # Runs every day at 3pm.
-  workflow_dispatch:
+  workflow_dispatch: # Allows manual triggering from GitHub Actions UI
 
 jobs:
-  scrape:
-    runs-on: ubuntu-latest
-    
-    
+  run-bot:
+    runs-on: ubuntu-latest # GitHub Actions provides Ubuntu, macOS, Windows runners. Ubuntu is usually cheapest and fastest for this.
+
     steps:
-    - uses: actions/checkout@v2
-    
+    - name: Checkout repository
+      uses: actions/checkout@v4 # Action to clone your repository code
+
     - name: Set up Python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v5 # Action to set up Python environment
       with:
-        python-version: '3.x'
-    
-    - name: Install Chrome
+        python-version: '3.9' # Specify the Python version your bot uses
+
+    - name: Install Google Chrome
       run: |
-        wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
-        sudo mkdir -p /etc/apt/sources.list.d
-        sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
-        sudo apt-get update
-        sudo apt-get -y install google-chrome-stable
+        sudo apt-get update -y
+        sudo apt-get install -y google-chrome-stable
+
     - name: Install ChromeDriver
       run: |
-        # Using specific ChromeDriver version for Chrome I used 132
-        CHROMEDRIVER_VERSION="132.0.6834.83"
-        echo "Installing ChromeDriver version: $CHROMEDRIVER_VERSION"
-        wget -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/$CHROMEDRIVER_VERSION/linux64/chromedriver-linux64.zip"
+        # Get the Chrome version
+        CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+\.\d+')
+        echo "Detected Chrome version: $CHROME_VERSION"
+
+        # Download the ChromeDriver corresponding to the Chrome version
+        # We need to fetch the LATEST_RELEASE for the major Chrome version
+        CHROMEDRIVER_VERSION=$(curl -sS https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_${CHROME_VERSION%.*} | sed 's/\.0$//')
+        echo "Downloading ChromeDriver version: $CHROMEDRIVER_VERSION"
+
+        # Construct the correct download URL for linux64
+        # Note: The structure for chrome-for-testing downloads is now like this:
+        # https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/126.0.6478.126/linux64/chromedriver-linux64.zip
+        wget -N https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROMEDRIVER_VERSION}/linux64/chromedriver-linux64.zip
         unzip chromedriver-linux64.zip
-        chmod +x chromedriver-linux64/chromedriver
-        sudo mv chromedriver-linux64/chromedriver /usr/local/bin/
-        
-    - name: Install dependencies
+
+        # Move ChromeDriver to /usr/bin as specified in your bot code
+        sudo mv chromedriver-linux64/chromedriver /usr/bin/chromedriver
+        sudo chmod +x /usr/bin/chromedriver
+
+    - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
+        # Create a requirements.txt if you don't have one:
+        # pip freeze > requirements.txt
+        # Then install from it:
         pip install -r requirements.txt
-        
-    - name: Python Bot
-      run: python index.py 
+        # Or manually install them if you prefer not to use requirements.txt:
+        # pip install python-telegram-bot selenium beautifulsoup4 requests # (add other packages if needed)
+
+    - name: Run the bot
+      env:
+        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        NUMBER1: ${{ secrets.NUMBER1 }}
+        NUMBER2: ${{ secrets.NUMBER2 }}
+      run: |
+        # Ensure your bot script is executable, if needed, though `python` command is usually enough
+        # chmod +x your_bot_script.py
+        python index.py # Replace 'your_bot_script.py' with the actual name of your Python file
