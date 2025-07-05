@@ -80,4 +80,4 @@ jobs:
         # This approach ensures that when triggered by the scheduled job, it only runs `check`
         # and then stops, while still allowing `run_polling` for local testing/debugging if needed.
         
-        python your_bot_script.py --scheduled-check
+        python index1.py --scheduled-check
