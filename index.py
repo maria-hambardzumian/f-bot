@@ -13,9 +13,10 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-TOKEN = os.getenv("TELEGRAM_TOKEN")
-NUMBER1 = os.getenv("NUMBER1", "")
-NUMBER2 = os.getenv("NUMBER2", "")
+# Get token from environment for security
+TOKEN = os.getenv('TELEGRAM_TOKEN')  # Replace fallback token if you want
+NUMBER1 = os.getenv('NUMBER1')
+NUMBER2 = os.getenv('NUMBER2')
 
 async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Opening Chrome...")
@@ -26,30 +27,29 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--window-size=1920,1180")
 
-    service = Service("/usr/bin/chromedriver")
+    service = Service("/usr/bin/chromedriver")  # Default chromedriver path on many Linux distros
+
     driver = webdriver.Chrome(service=service, options=chrome_options)
 
     try:
         driver.get("https://roadpolice.am/hy")
 
-        # Example: click a button to open modal
+        # Step 1: Click the button to open the modal
         button_span = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable(
-                (By.CSS_SELECTOR,
-                 "#index_page_steps > div > div > div > div:nth-child(3) > button > span > span")
-            )
+            EC.element_to_be_clickable((By.CSS_SELECTOR,
+                "#index_page_steps > div > div > div > div:nth-child(3) > button > span > span"))
         )
         button = button_span.find_element(By.XPATH, "./ancestor::button")
         button.click()
 
-        await asyncio.sleep(0.2)
+        await asyncio.sleep(0.2)  # short wait to make sure modal is fully open
 
         actions = ActionChains(driver)
         actions.send_keys(Keys.TAB).pause(0.4).send_keys(Keys.TAB).perform()
 
         await asyncio.sleep(1)
-        active_element = driver.switch_to.active_element
 
+        active_element = driver.switch_to.active_element
         for digit in NUMBER1:
             active_element.send_keys(digit)
             await asyncio.sleep(0.1)
@@ -70,15 +70,96 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         submit_button.click()
 
-        # The rest of your bot's logic here...
         await asyncio.sleep(1.5)
 
-        # Take a screenshot after actions
-        screenshot = driver.get_screenshot_as_png()
-        bio = io.BytesIO(screenshot)
-        bio.name = "result.png"
+        dropdown = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR,
+                "body > div > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register > form > div:nth-child(2) > span > span.selection > span"))
+        )
+        dropdown.click()
 
-        await update.message.reply_photo(photo=bio, caption="Screenshot after operation.")
+        await asyncio.sleep(0.3)
+        actions = ActionChains(driver)
+        actions.send_keys(Keys.ARROW_DOWN).pause(0.1)
+        actions.send_keys(Keys.ARROW_DOWN).pause(0.1)
+        actions.send_keys(Keys.ENTER).perform()
+
+        await asyncio.sleep(0.5)
+
+        second_dropdown = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR,
+                "body > div > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register > form > div:nth-child(3) > span > span.selection > span"))
+        )
+        second_dropdown.click()
+        await asyncio.sleep(0.3)
+
+        actions = ActionChains(driver)
+        actions.send_keys(Keys.ARROW_DOWN).pause(0.1)
+        actions.send_keys(Keys.ARROW_DOWN).pause(0.1)
+        actions.send_keys(Keys.ENTER).perform()
+
+        await asyncio.sleep(1.5)
+
+        calendar_label = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR,
+                "body > div.wrapper > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register > form > div:nth-child(4) > label"))
+        )
+        calendar_label.click()
+        await asyncio.sleep(0.5)
+
+        while True:
+            try:
+                day_container = WebDriverWait(driver, 5).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR,
+                        "div.flatpickr-calendar.open .flatpickr-days .dayContainer"))
+                )
+                days = day_container.find_elements(By.CSS_SELECTOR, "span")
+
+                found_next_month_day = False
+
+                for day in days:
+                    classes = day.get_attribute("class") or ""
+
+                    if "flatpickr-disabled" in classes or "prevMonthDay" in classes:
+                        continue
+
+                    elif "nextMonthDay" in classes:
+                        found_next_month_day = True
+                        break
+
+                    else:
+                        aria_label = day.get_attribute("aria-label")
+                        day.click()
+                        await asyncio.sleep(4)
+                        screenshot = driver.get_screenshot_as_png()
+                        bio = io.BytesIO(screenshot)
+                        bio.name = "valid_date.png"
+
+                        await update.message.reply_photo(
+                            photo=bio,
+                            caption=f"Առաջին հասանելի օրն է՝ {aria_label}"
+                        )
+                        return
+
+                if found_next_month_day:
+                    next_month_button = WebDriverWait(driver, 3).until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR,
+                            "div.flatpickr-calendar.open .flatpickr-next-month"))
+                    )
+                    next_month_button.click()
+                    await asyncio.sleep(1.5)
+                else:
+                    break
+
+            except (TimeoutException, NoSuchElementException):
+                await update.message.reply_text("Չհաջողվեց գտնել ազատ օր 😕")
+                break
+
+        png_bytes = driver.get_screenshot_as_png()
+        bio = io.BytesIO(png_bytes)
+        bio.name = "screenshot_after_post.png"
+
+        await update.message.reply_photo(photo=bio, caption="Screenshot after background request.")
 
     except Exception as e:
         await update.message.reply_text(f"Error occurred: {e}")
@@ -89,10 +170,14 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Hello! I'm your bot.")
 
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Here's how you can use me!")
+
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("check", check))
 
     print("Bot is running...")
