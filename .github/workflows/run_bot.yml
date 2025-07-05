@@ -1,0 +1,28 @@
+name: Run Telegram Bot
+
+on:
+  workflow_dispatch:  # manual trigger from GitHub UI
+  schedule:
+    - cron: '*/15 * * * *'  # runs every 15 minutes; adjust as needed
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+
+    env:
+      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+      NUMBER1: ${{ secrets.NUMBER1 }}
+      NUMBER2: ${{ secrets.NUMBER2 }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python and install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium-chromedriver
+          python -m pip install --upgrade pip
+          pip install selenium python-telegram-bot requests
+
+      - name: Run Telegram Bot script
+        run: python your_bot_script.py
