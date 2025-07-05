@@ -1,40 +1,48 @@
 import io
 import os
 import asyncio
+import datetime
+from types import SimpleNamespace
+
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-TOKEN = os.getenv('TELEGRAM_TOKEN')
-NUMBER1 = os.getenv('NUMBER1')
-NUMBER2 = os.getenv('NUMBER2')
+from telegram import Bot, User, Chat, Message, InputFile
 
-async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Opening Chrome...")
+# Environment variables
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+NUMBER1 = os.getenv("NUMBER1")
+NUMBER2 = os.getenv("NUMBER2")
+CHAT_ID = os.getenv("CHAT_ID")  # Optional: or hardcode your Telegram ID here
 
-  
+bot = Bot(token=TOKEN)
+
+
+async def check():
+    await bot.send_message(chat_id=CHAT_ID, text="Opening Chrome...")
+
     chrome_options = Options()
-    chrome_options.add_argument("--headless")  # safer than --headless=new on GitHub Actions
+    chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--disable-software-rasterizer")
     chrome_options.add_argument("--window-size=1920,1180")
-    
-    service = Service("/usr/bin/chromedriver")  # Path when installed via apt
 
+    service = Service("/usr/bin/chromedriver")  # Works with apt-installed chromedriver
     driver = webdriver.Chrome(service=service, options=chrome_options)
 
     try:
         driver.get("https://roadpolice.am/hy")
 
+        # --- (Your existing selenium logic unchanged below) ---
         button_span = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.CSS_SELECTOR,
                 "#index_page_steps > div > div > div > div:nth-child(3) > button > span > span"))
@@ -46,7 +54,6 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         actions = ActionChains(driver)
         actions.send_keys(Keys.TAB).pause(0.4).send_keys(Keys.TAB).perform()
-
         await asyncio.sleep(1)
 
         active_element = driver.switch_to.active_element
@@ -63,13 +70,12 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await asyncio.sleep(0.1)
 
         actions.send_keys(Keys.TAB).perform()
-
         await asyncio.sleep(0.5)
+
         submit_button = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, "#hqb-login-submit"))
         )
         submit_button.click()
-
         await asyncio.sleep(1.5)
 
         dropdown = WebDriverWait(driver, 10).until(
@@ -77,13 +83,8 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "body > div > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register > form > div:nth-child(2) > span > span.selection > span"))
         )
         dropdown.click()
-
         await asyncio.sleep(0.3)
-        actions = ActionChains(driver)
-        actions.send_keys(Keys.ARROW_DOWN).pause(0.1)
-        actions.send_keys(Keys.ARROW_DOWN).pause(0.1)
-        actions.send_keys(Keys.ENTER).perform()
-
+        actions.send_keys(Keys.ARROW_DOWN).pause(0.1).send_keys(Keys.ARROW_DOWN).pause(0.1).send_keys(Keys.ENTER).perform()
         await asyncio.sleep(0.5)
 
         second_dropdown = WebDriverWait(driver, 10).until(
@@ -92,12 +93,7 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         second_dropdown.click()
         await asyncio.sleep(0.3)
-
-        actions = ActionChains(driver)
-        actions.send_keys(Keys.ARROW_DOWN).pause(0.1)
-        actions.send_keys(Keys.ARROW_DOWN).pause(0.1)
-        actions.send_keys(Keys.ENTER).perform()
-
+        actions.send_keys(Keys.ARROW_DOWN).pause(0.1).send_keys(Keys.ARROW_DOWN).pause(0.1).send_keys(Keys.ENTER).perform()
         await asyncio.sleep(1.5)
 
         calendar_label = WebDriverWait(driver, 10).until(
@@ -122,11 +118,9 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                     if "flatpickr-disabled" in classes or "prevMonthDay" in classes:
                         continue
-
                     elif "nextMonthDay" in classes:
                         found_next_month_day = True
                         break
-
                     else:
                         aria_label = day.get_attribute("aria-label")
                         day.click()
@@ -134,9 +128,11 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         screenshot = driver.get_screenshot_as_png()
                         bio = io.BytesIO(screenshot)
                         bio.name = "valid_date.png"
+                        bio.seek(0)
 
-                        await update.message.reply_photo(
-                            photo=bio,
+                        await bot.send_photo(
+                            chat_id=CHAT_ID,
+                            photo=InputFile(bio),
                             caption=f"Առաջին հասանելի օրն է՝ {aria_label}"
                         )
                         return
@@ -152,33 +148,22 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     break
 
             except (TimeoutException, NoSuchElementException):
-                await update.message.reply_text("Չհաջողվեց գտնել ազատ օր 😕")
+                await bot.send_message(chat_id=CHAT_ID, text="Չհաջողվեց գտնել ազատ օր 😕")
                 break
 
         png_bytes = driver.get_screenshot_as_png()
         bio = io.BytesIO(png_bytes)
         bio.name = "screenshot_after_post.png"
+        bio.seek(0)
 
-        await update.message.reply_photo(photo=bio, caption="Screenshot after background request.")
+        await bot.send_photo(chat_id=CHAT_ID, photo=InputFile(bio), caption="Screenshot after background request.")
 
     except Exception as e:
-        await update.message.reply_text(f"Error occurred: {e}")
-
+        await bot.send_message(chat_id=CHAT_ID, text=f"Error occurred: {e}")
     finally:
         driver.quit()
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Hello! I'm your bot.")
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Here's how you can use me!")
-
+# Run check() directly
 if __name__ == '__main__':
-    app = ApplicationBuilder().token(TOKEN).build()
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("check", check))
-
-    print("Bot is running...")
-    app.run_polling()
+    asyncio.run(check())
