@@ -54,4 +54,4 @@ jobs:
           NUMBER1: ${{ secrets.NUMBER1 }}
           NUMBER2: ${{ secrets.NUMBER2 }}
         run: |
-          python your_bot_script.py
+          python index.py
