@@ -26,23 +26,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: 🧰 Install Google Chrome (latest stable)
+      - name: 🧰 Install Chrome (manual pin)
         run: |
           wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo apt install -y ./google-chrome-stable_current_amd64.deb
           google-chrome --version
 
-      - name: 🧰 Install matching ChromeDriver
+      - name: 🧰 Install ChromeDriver 124.0.6367.91 (compatible)
         run: |
-          CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+' | head -1)
-          echo "Detected Chrome version: $CHROME_VERSION"
-          DRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION")
-          echo "Matching ChromeDriver version: $DRIVER_VERSION"
-          wget -O chromedriver.zip "https://chromedriver.storage.googleapis.com/${DRIVER_VERSION}/chromedriver_linux64.zip"
+          wget -O chromedriver.zip https://chromedriver.storage.googleapis.com/124.0.6367.91/chromedriver_linux64.zip
           unzip chromedriver.zip
           sudo mv chromedriver /usr/bin/chromedriver
           sudo chmod +x /usr/bin/chromedriver
           chromedriver --version
 
-      - name: ▶️ Run Telegram bot
-        run: python index.py
+      - name: ▶️ Run your Telegram bot
+        run: python bot.py
