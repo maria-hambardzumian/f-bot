@@ -62,4 +62,4 @@ jobs:
       run: |
         # Ensure your bot script is executable, if needed, though `python` command is usually enough
         # chmod +x your_bot_script.py
-        python index.py # Replace 'your_bot_script.py' with the actual name of your Python file
+        python debug.py # Replace 'your_bot_script.py' with the actual name of your Python file
