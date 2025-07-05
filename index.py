@@ -20,15 +20,15 @@ NUMBER2 = os.getenv('NUMBER2')
 async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Opening Chrome...")
 
+  
     chrome_options = Options()
-    chrome_options.add_argument("--headless=new")
+    chrome_options.add_argument("--headless")  # safer than --headless=new on GitHub Actions
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1180")
-
-    # Use chromedriver from PATH
-    service = Service("/usr/local/bin/chromedriver")
+    
+    service = Service("/usr/bin/chromedriver")  # Path when installed via apt
 
     driver = webdriver.Chrome(service=service, options=chrome_options)
 
