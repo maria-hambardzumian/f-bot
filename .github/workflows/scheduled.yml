@@ -53,6 +53,7 @@ jobs:
         TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
         NUMBER1: ${{ secrets.NUMBER1 }}
         NUMBER2: ${{ secrets.NUMBER2 }}
+        TELEGRAM_SCHEDULE_CHAT_ID: ${{ secrets.TELEGRAM_SCHEDULE_CHAT_ID }}
       run: |
         # Instead of running the full bot polling, we'll simulate a command trigger
         # and then exit.
