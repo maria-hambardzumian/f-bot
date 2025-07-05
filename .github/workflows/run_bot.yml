@@ -25,4 +25,4 @@ jobs:
           pip install selenium python-telegram-bot requests
 
       - name: Run Telegram Bot script
-        run: python your_bot_script.py
+        run: python index.py
