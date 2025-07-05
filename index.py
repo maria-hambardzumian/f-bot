@@ -1,50 +1,30 @@
-import os
 import io
+import os
 import asyncio
-import requests
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
-from telegram import Bot
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-# Load environment variables
+# Read from environment variables
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-NUMBER1 = os.getenv("NUMBER1")
-NUMBER2 = os.getenv("NUMBER2")
+NUMBER1 = os.getenv("NUMBER1", "")
+NUMBER2 = os.getenv("NUMBER2", "")
 
-bot = Bot(token=TOKEN)
-
-async def get_latest_chat_id():
-    url = f"https://api.telegram.org/bot{TOKEN}/getUpdates"
-    response = requests.get(url)
-    data = response.json()
-
-    if not data.get("ok") or not data.get("result"):
-        raise Exception("No recent messages to determine chat ID. Please message the bot first.")
-
-    # Get the most recent message
-    chat_id = data["result"][-1]["message"]["chat"]["id"]
-    return chat_id
-
-async def check():
-    try:
-        chat_id = await get_latest_chat_id()
-        await bot.send_message(chat_id=chat_id, text="🚦 Checking availability...")
-    except Exception as e:
-        print(f"❌ Failed to get chat ID: {e}")
-        return
+async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Opening Chrome...")
 
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1180")
 
     service = Service("/usr/bin/chromedriver")
@@ -53,9 +33,12 @@ async def check():
     try:
         driver.get("https://roadpolice.am/hy")
 
+        # Click button to open modal
         button_span = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR,
-                "#index_page_steps > div > div > div > div:nth-child(3) > button > span > span"))
+            EC.element_to_be_clickable(
+                (By.CSS_SELECTOR,
+                 "#index_page_steps > div > div > div > div:nth-child(3) > button > span > span")
+            )
         )
         button = button_span.find_element(By.XPATH, "./ancestor::button")
         button.click()
@@ -64,9 +47,10 @@ async def check():
 
         actions = ActionChains(driver)
         actions.send_keys(Keys.TAB).pause(0.4).send_keys(Keys.TAB).perform()
-        await asyncio.sleep(1)
 
+        await asyncio.sleep(1)
         active_element = driver.switch_to.active_element
+
         for digit in NUMBER1:
             active_element.send_keys(digit)
             await asyncio.sleep(0.1)
@@ -80,8 +64,8 @@ async def check():
             await asyncio.sleep(0.1)
 
         actions.send_keys(Keys.TAB).perform()
-        await asyncio.sleep(0.5)
 
+        await asyncio.sleep(0.5)
         submit_button = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, "#hqb-login-submit"))
         )
@@ -89,27 +73,45 @@ async def check():
 
         await asyncio.sleep(1.5)
 
+        # Click first dropdown
         dropdown = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR,
-                "form > div:nth-child(2) > span > span.selection > span"))
+            EC.element_to_be_clickable(
+                (By.CSS_SELECTOR,
+                 "body > div > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register > form > div:nth-child(2) > span > span.selection > span")
+            )
         )
         dropdown.click()
+
         await asyncio.sleep(0.3)
-        actions.send_keys(Keys.ARROW_DOWN).pause(0.1).send_keys(Keys.ARROW_DOWN).send_keys(Keys.ENTER).perform()
+        actions = ActionChains(driver)
+        actions.send_keys(Keys.ARROW_DOWN).pause(0.1)
+        actions.send_keys(Keys.ARROW_DOWN).pause(0.1)
+        actions.send_keys(Keys.ENTER).perform()
+
         await asyncio.sleep(0.5)
 
+        # Click second dropdown
         second_dropdown = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR,
-                "form > div:nth-child(3) > span > span.selection > span"))
+            EC.element_to_be_clickable(
+                (By.CSS_SELECTOR,
+                 "body > div > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register > form > div:nth-child(3) > span > span.selection > span")
+            )
         )
         second_dropdown.click()
         await asyncio.sleep(0.3)
-        actions.send_keys(Keys.ARROW_DOWN).pause(0.1).send_keys(Keys.ARROW_DOWN).send_keys(Keys.ENTER).perform()
+
+        actions = ActionChains(driver)
+        actions.send_keys(Keys.ARROW_DOWN).pause(0.1)
+        actions.send_keys(Keys.ARROW_DOWN).pause(0.1)
+        actions.send_keys(Keys.ENTER).perform()
+
         await asyncio.sleep(1.5)
 
         calendar_label = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR,
-                "form > div:nth-child(4) > label"))
+            EC.element_to_be_clickable(
+                (By.CSS_SELECTOR,
+                 "body > div.wrapper > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register > form > div:nth-child(4) > label")
+            )
         )
         calendar_label.click()
         await asyncio.sleep(0.5)
@@ -117,8 +119,9 @@ async def check():
         while True:
             try:
                 day_container = WebDriverWait(driver, 5).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR,
-                        "div.flatpickr-calendar.open .flatpickr-days .dayContainer"))
+                    EC.presence_of_element_located(
+                        (By.CSS_SELECTOR, "div.flatpickr-calendar.open .flatpickr-days .dayContainer")
+                    )
                 )
                 days = day_container.find_elements(By.CSS_SELECTOR, "span")
 
@@ -129,9 +132,11 @@ async def check():
 
                     if "flatpickr-disabled" in classes or "prevMonthDay" in classes:
                         continue
+
                     elif "nextMonthDay" in classes:
                         found_next_month_day = True
                         break
+
                     else:
                         aria_label = day.get_attribute("aria-label")
                         day.click()
@@ -139,14 +144,18 @@ async def check():
                         screenshot = driver.get_screenshot_as_png()
                         bio = io.BytesIO(screenshot)
                         bio.name = "valid_date.png"
-                        await bot.send_photo(chat_id=chat_id, photo=bio,
-                            caption=f"✅ Առաջին հասանելի օրն է՝ {aria_label}")
+
+                        await update.message.reply_photo(
+                            photo=bio,
+                            caption=f"Առաջին հասանելի օրն է՝ {aria_label}"
+                        )
                         return
 
                 if found_next_month_day:
                     next_month_button = WebDriverWait(driver, 3).until(
-                        EC.element_to_be_clickable((By.CSS_SELECTOR,
-                            "div.flatpickr-calendar.open .flatpickr-next-month"))
+                        EC.element_to_be_clickable(
+                            (By.CSS_SELECTOR, "div.flatpickr-calendar.open .flatpickr-next-month")
+                        )
                     )
                     next_month_button.click()
                     await asyncio.sleep(1.5)
@@ -154,22 +163,30 @@ async def check():
                     break
 
             except (TimeoutException, NoSuchElementException):
-                await bot.send_message(chat_id=chat_id, text="⚠️ Չհաջողվեց գտնել ազատ օր 😕")
+                await update.message.reply_text("Չհաջողվեց գտնել ազատ օր 😕")
                 break
 
         # Final screenshot
         png_bytes = driver.get_screenshot_as_png()
         bio = io.BytesIO(png_bytes)
         bio.name = "screenshot_after_post.png"
-        await bot.send_photo(chat_id=chat_id, photo=bio,
-                             caption="📷 Screenshot after checking all months.")
+
+        await update.message.reply_photo(photo=bio, caption="Screenshot after background request.")
 
     except Exception as e:
-        await bot.send_message(chat_id=chat_id, text=f"💥 Error: {e}")
+        await update.message.reply_text(f"Error occurred: {e}")
 
     finally:
         driver.quit()
-        print("🧹 Done.")
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Hello! I'm your bot.")
 
 if __name__ == '__main__':
-    asyncio.run(check())
+    app = ApplicationBuilder().token(TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("check", check))
+
+    print("Bot is running...")
+    app.run_polling()
