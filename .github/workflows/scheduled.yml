@@ -1,0 +1,83 @@
+name: Scheduled Bot Check
+
+on:
+  schedule:
+    # Run every 2 hours
+    # This uses cron syntax: M H DOM MON DOW
+    # For every 2 hours, this would typically be '0 */2 * * *'
+    # '0 */2 * * *' means at minute 0 past every 2nd hour.
+    # Example: 00:00, 02:00, 04:00, etc. UTC time.
+    # IMPORTANT: GitHub Actions schedules run in UTC time.
+    # Adjust this cron expression if you need a specific local time.
+    - cron: '0 */2 * * *'
+  workflow_dispatch: # Keep this to allow manual triggering
+
+jobs:
+  run-bot-check: # Renamed job for clarity
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+
+    - name: Install Google Chrome
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y google-chrome-stable
+
+    - name: Install ChromeDriver
+      run: |
+        CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+\.\d+')
+        echo "Detected Chrome version: $CHROME_VERSION"
+
+        CHROMEDRIVER_VERSION=$(curl -sS https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_${CHROME_VERSION%.*} | sed 's/\.0$//')
+        echo "Downloading ChromeDriver version: $CHROMEDRIVER_VERSION"
+
+        wget -N https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROMEDRIVER_VERSION}/linux64/chromedriver-linux64.zip
+        unzip chromedriver-linux64.zip
+        sudo mv chromedriver-linux64/chromedriver /usr/bin/chromedriver
+        sudo chmod +x /usr/bin/chromedriver
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run the bot's check function
+      env:
+        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        NUMBER1: ${{ secrets.NUMBER1 }}
+        NUMBER2: ${{ secrets.NUMBER2 }}
+      run: |
+        # Instead of running the full bot polling, we'll simulate a command trigger
+        # and then exit.
+        # This requires a slight modification to your Python script to make the `check`
+        # function runnable independently without `app.run_polling()`.
+
+        # OPTION 1: Best - Run a specific function directly if your bot supports it
+        # If your bot script can be imported and a specific function run, this is cleanest.
+        # This is for illustration; your current bot structure doesn't easily allow this without refactoring.
+        # python -c "from your_bot_script import check; import asyncio; asyncio.run(check(None, None))"
+
+        # OPTION 2: Modify your script to accept an argument to run 'check' and then exit.
+        # This is more practical for your current bot structure.
+        # Let's assume you add an argument handler for 'check_scheduled'
+
+        # Since your bot is a polling bot, running `app.run_polling()` will keep it alive
+        # until the workflow timeout (default 6 hours) or until it finishes.
+        # Your `check` function already has `return` statements and `driver.quit()` which
+        # will cause the script to eventually finish after processing.
+        
+        # The key is that `app.run_polling()` is blocking. To run 'check' and then
+        # immediately stop the bot process, you need to call `app.stop()` or exit.
+        
+        # *** Let's adjust your bot's __main__ block slightly for this scenario ***
+        # This approach ensures that when triggered by the scheduled job, it only runs `check`
+        # and then stops, while still allowing `run_polling` for local testing/debugging if needed.
+        
+        python your_bot_script.py --scheduled-check
