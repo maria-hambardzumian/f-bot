@@ -2,7 +2,7 @@ name: Run Telegram Bot
 
 on:
   push:
-    branches: [main]  # Or change to your default branch
+    branches: [main]
 
 jobs:
   run-bot:
@@ -12,39 +12,27 @@ jobs:
       - name: 📥 Checkout repository
         uses: actions/checkout@v3
 
-      - name: 🧱 Install Chrome and ChromeDriver
+      - name: 🧱 Install fixed Chrome & ChromeDriver versions
         run: |
           sudo apt-get update
           sudo apt-get install -y wget unzip curl
 
-          # Install Google Chrome
-          wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-          sudo apt install -y ./google-chrome-stable_current_amd64.deb
-
-          # Verify Chrome installation
+          # Install Chrome 114.0.5735.133
+          wget https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_114.0.5735.133-1_amd64.deb
+          sudo apt install -y ./google-chrome-stable_114.0.5735.133-1_amd64.deb
           google-chrome --version
 
-          # Get Chrome major version (e.g., 114)
-          CHROME_MAJOR=$(google-chrome --version | grep -oP '\d+' | head -1)
-          echo "Chrome major version: $CHROME_MAJOR"
-
-          # Get matching ChromeDriver version
-          CHROMEDRIVER_VERSION=$(curl -sS https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_MAJOR)
-          echo "ChromeDriver version: $CHROMEDRIVER_VERSION"
-
-          # Download and install ChromeDriver
-          wget https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip
+          # Install ChromeDriver 114.0.5735.90
+          wget https://chromedriver.storage.googleapis.com/114.0.5735.90/chromedriver_linux64.zip
           unzip chromedriver_linux64.zip
           sudo mv chromedriver /usr/local/bin/
           sudo chmod +x /usr/local/bin/chromedriver
-
-          # Verify ChromeDriver
           chromedriver --version
 
       - name: 🐍 Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'  # Or your preferred version
+          python-version: '3.11'
 
       - name: 📦 Install Python dependencies
         run: pip install -r requirements.txt
@@ -54,4 +42,4 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           NUMBER1: ${{ secrets.NUMBER1 }}
           NUMBER2: ${{ secrets.NUMBER2 }}
-        run: python index.py
+        run: python bot.py
