@@ -41,6 +41,8 @@ jobs:
         # Move ChromeDriver to /usr/bin as specified in your bot code
         sudo mv chromedriver-linux64/chromedriver /usr/bin/chromedriver
         sudo chmod +x /usr/bin/chromedriver
+        chromedriver --version # ADD THIS
+        ls -l /usr/bin/chromedriver # ADD THIS to confirm path and permissions
 
     - name: Install Python dependencies
       run: |
