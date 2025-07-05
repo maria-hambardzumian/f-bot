@@ -13,8 +13,7 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-# Get token from environment for security
-TOKEN = os.getenv('TELEGRAM_TOKEN')  # Replace fallback token if you want
+TOKEN = os.getenv('TELEGRAM_TOKEN')
 NUMBER1 = os.getenv('NUMBER1')
 NUMBER2 = os.getenv('NUMBER2')
 
@@ -22,19 +21,20 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Opening Chrome...")
 
     chrome_options = Options()
-    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1180")
 
-    service = Service("/usr/bin/chromedriver")  # Default chromedriver path on many Linux distros
+    # Use chromedriver from PATH
+    service = Service("/usr/local/bin/chromedriver")
 
     driver = webdriver.Chrome(service=service, options=chrome_options)
 
     try:
         driver.get("https://roadpolice.am/hy")
 
-        # Step 1: Click the button to open the modal
         button_span = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.CSS_SELECTOR,
                 "#index_page_steps > div > div > div > div:nth-child(3) > button > span > span"))
@@ -42,7 +42,7 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         button = button_span.find_element(By.XPATH, "./ancestor::button")
         button.click()
 
-        await asyncio.sleep(0.2)  # short wait to make sure modal is fully open
+        await asyncio.sleep(0.2)
 
         actions = ActionChains(driver)
         actions.send_keys(Keys.TAB).pause(0.4).send_keys(Keys.TAB).perform()
