@@ -43,4 +43,4 @@ jobs:
           sudo chmod +x /usr/bin/chromedriver
 
       - name: ▶️ Run bot
-        run: python bot.py
+        run: python index.py
