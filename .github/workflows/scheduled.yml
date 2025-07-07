@@ -2,14 +2,14 @@ name: Scheduled Bot Check
 
 on:
   schedule:
-    # Run every 1 hours
+    # Run every 2 hours
     # This uses cron syntax: M H DOM MON DOW
-    # For every 1 hours, this would typically be '0 */2 * * *'
-    # '0 */1 * * *' means at minute 0 past every 2nd hour.
-    # Example: 01:00, 02:00, 03:00, etc. UTC time.
+    # For every 2 hours, this would typically be '0 */2 * * *'
+    # '0 */2 * * *' means at minute 0 past every 2nd hour.
+    # Example: 00:00, 02:00, 04:00, etc. UTC time.
     # IMPORTANT: GitHub Actions schedules run in UTC time.
     # Adjust this cron expression if you need a specific local time.
-    - cron: '0 */1 * * *'
+    - cron: '0 */2 * * *'
   workflow_dispatch: # Keep this to allow manual triggering
 
 jobs:
