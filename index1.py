@@ -167,16 +167,21 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 for day in days:
                     classes = day.get_attribute("class") or ""
 
-                    if "flatpickr-disabled" in classes or "prevMonthDay" in classes:
+                    if "flatpickr-disabled" in classes:
                         continue
 
-                    elif "nextMonthDay" in classes:
-                        found_next_month_day = True
-                        break
+                    # elif "nextMonthDay" in classes:
+                    #     found_next_month_day = True
+                    #     break
 
                     else:
-                        aria_label = day.get_attribute("aria-label")
-                        day.click()
+                        # aria_label = day.get_attribute("aria-label")
+                       day.click()
+                        await asyncio.sleep(5)
+                        closest = WebDriverWait(driver, 10).until(
+                                    EC.element_to_be_clickable((By.CSS_SELECTOR, "#nearest-day-submit"))
+                                )
+                        closest.click()
                         await asyncio.sleep(5)
                         screenshot = driver.get_screenshot_as_png()
                         bio = io.BytesIO(screenshot)
@@ -185,13 +190,13 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         if update:
                             await update.message.reply_photo(
                                 photo=bio,
-                                caption=f"Առաջին հասանելի օրն է՝ {aria_label}"
+                                caption=f"Առաջին հասանելի օրն է՝"
                             )
                         else:
                             # This now uses the mocked reply_photo method provided by ScheduledUpdate
                             await update.message.reply_photo(
                                 photo=bio,
-                                caption=f"[Scheduled] Առաջին հասանելի օրն է՝ {aria_label}"
+                                caption=f"[Scheduled] Առաջին հասանելի օրն է՝"
                             )
                         return
 
