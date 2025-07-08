@@ -126,7 +126,7 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         actions.send_keys(Keys.ARROW_DOWN).pause(0.2)
         actions.send_keys(Keys.ENTER).perform()
 
-        await asyncio.sleep(1)
+        await asyncio.sleep(1.5)
 
         second_dropdown = WebDriverWait(driver, 20).until(
             EC.element_to_be_clickable(
@@ -142,7 +142,7 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         actions.send_keys(Keys.ARROW_DOWN).pause(0.2)
         actions.send_keys(Keys.ENTER).perform()
 
-        await asyncio.sleep(2)
+        await asyncio.sleep(4)
 
         calendar_label = WebDriverWait(driver, 20).until(
             EC.element_to_be_clickable(
@@ -151,7 +151,7 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         )
         calendar_label.click()
-        await asyncio.sleep(1)
+        await asyncio.sleep(2)
 
         while True:
             try:
