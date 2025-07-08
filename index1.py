@@ -142,7 +142,7 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         actions.send_keys(Keys.ARROW_DOWN).pause(0.2)
         actions.send_keys(Keys.ENTER).perform()
 
-        await asyncio.sleep(4)
+        await asyncio.sleep(5)
 
         calendar_label = WebDriverWait(driver, 20).until(
             EC.element_to_be_clickable(
@@ -182,7 +182,7 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                     EC.element_to_be_clickable((By.CSS_SELECTOR, "#nearest-day-submit"))
                                 )
                         closest.click()
-                        await asyncio.sleep(5)
+                        await asyncio.sleep(8)
                         screenshot = driver.get_screenshot_as_png()
                         bio = io.BytesIO(screenshot)
                         bio.name = "valid_date.png"
