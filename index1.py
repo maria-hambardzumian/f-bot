@@ -176,7 +176,7 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                     else:
                         # aria_label = day.get_attribute("aria-label")
-                       day.click()
+                        day.click()
                         await asyncio.sleep(5)
                         closest = WebDriverWait(driver, 10).until(
                                     EC.element_to_be_clickable((By.CSS_SELECTOR, "#nearest-day-submit"))
