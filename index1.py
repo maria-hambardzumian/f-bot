@@ -72,7 +72,7 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         driver.get("https://roadpolice.am/hy")
-
+        await asyncio.sleep(2) 
         button_span = WebDriverWait(driver, 20).until(
             EC.element_to_be_clickable(
                 (By.CSS_SELECTOR,
