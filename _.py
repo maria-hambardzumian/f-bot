@@ -260,12 +260,32 @@ async def main():
     # In GitHub Actions, we'll just run the check command directly
     if os.getenv('GITHUB_ACTIONS'):
         print("Running in GitHub Actions...")
-        update = Update(0, None)
-        update.message = type('obj', (object,), {
-            'reply_text': lambda text: print(f"Bot would send: {text}"),
-            'reply_photo': lambda photo, caption: print(f"Bot would send photo with caption: {caption}"),
-            'chat_id': chat_id
-        })
+        from telegram import Message, Chat
+        
+        # Create a mock chat
+        chat = Chat(id=int(chat_id), type='private')
+        
+        # Create a mock message with the required methods
+        message = Message(
+            message_id=1,
+            date=datetime.now(),
+            chat=chat,
+        )
+        
+        # Add the custom reply methods
+        async def mock_reply_text(text, *args, **kwargs):
+            print(f"Bot would send: {text}")
+            return None
+
+        async def mock_reply_photo(photo, caption=None, *args, **kwargs):
+            print(f"Bot would send photo with caption: {caption}")
+            return None
+
+        message.reply_text = mock_reply_text
+        message.reply_photo = mock_reply_photo
+        
+        # Create the update with our mock message
+        update = Update(update_id=1, message=message)
         await check(update, None)
     else:
         # Normal bot operation for local development
