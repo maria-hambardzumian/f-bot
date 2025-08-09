@@ -186,12 +186,15 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         hour_text = hour_element.text
                         await asyncio.sleep(2)  # Wait 2 seconds
                         
+                        # Debug: Print and send raw values
+                        await update.message.reply_text(f"Debug - Raw aria_label: {aria_label}")
+                        await update.message.reply_text(f"Debug - Raw hour_text: {hour_text}")
+                        
                         # Combine aria_label (date) with hour_text
                         date_obj = datetime.strptime(aria_label, "%B %d, %Y")  # Parse aria_label
                         formatted_date = date_obj.strftime("%d-%m-%Y")  # Format as dd-mm-yyyy
                         combined_datetime = f"{hour_text}{formatted_date}"  # Combine hour and date
-                        print("Combined datetime:", combined_datetime)
-
+                        await update.message.reply_text(f"Debug - Combined datetime: {combined_datetime}")
                         
                         element = WebDriverWait(driver, 10).until(
                             EC.presence_of_element_located((By.CSS_SELECTOR, 
@@ -201,23 +204,33 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         print("Found text:", inner_text)
                         
                         # Parse the datetime string
+                        await update.message.reply_text(f"Debug - Raw inner_text: '{inner_text}'")
                         
                         # Clean and parse the text
                         cleaned_text = inner_text.strip()  # Remove any whitespace or newlines
+                        await update.message.reply_text(f"Debug - Cleaned text: '{cleaned_text}'")
                         
                         # Format: "hh:mmdd-mm-yyyy"
                         time_part = cleaned_text[:5]  # "14:10"
                         date_part = cleaned_text[5:]  # "04-09-2025"
+                        await update.message.reply_text(f"Debug - Time part: '{time_part}'")
+                        await update.message.reply_text(f"Debug - Date part: '{date_part}'")
                         
-                        # Parse the existing date
-                        datetime_str = f"{date_part.strip()} {time_part.strip()}"  # Ensure no extra whitespace
-                        print(f"Attempting to parse datetime string: '{datetime_str}'")  # Debug print
-                        parsed_datetime = datetime.strptime(datetime_str, "%d-%m-%Y %H:%M")
-                        formatted_date = parsed_datetime.strftime("%Y-%m-%d %H:%M")
-                        print("Parsed datetime:", formatted_date)
-                        
-                        # Parse the combined (selected) date
-                        combined_datetime_obj = datetime.strptime(combined_datetime, "%H:%M%d-%m-%Y")
+                        try:
+                            # Parse the existing date
+                            datetime_str = f"{date_part.strip()} {time_part.strip()}"
+                            await update.message.reply_text(f"Debug - Datetime string to parse: '{datetime_str}'")
+                            parsed_datetime = datetime.strptime(datetime_str, "%d-%m-%Y %H:%M")
+                            formatted_date = parsed_datetime.strftime("%Y-%m-%d %H:%M")
+                            await update.message.reply_text(f"Debug - Successfully parsed datetime: {formatted_date}")
+                            
+                            # Parse the combined (selected) date
+                            await update.message.reply_text(f"Debug - Combined datetime to parse: '{combined_datetime}'")
+                            combined_datetime_obj = datetime.strptime(combined_datetime, "%H:%M%d-%m-%Y")
+                            await update.message.reply_text(f"Debug - Successfully parsed combined datetime")
+                        except ValueError as e:
+                            await update.message.reply_text(f"Debug - Date parsing error: {str(e)}")
+                            raise
                         
                         screenshot = driver.get_screenshot_as_png()
                         bio = io.BytesIO(screenshot)
