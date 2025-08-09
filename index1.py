@@ -71,7 +71,7 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     driver = webdriver.Chrome(service=service, options=chrome_options)
 
     try:
-        driver.get("https://roadpolice.am/hy")
+        driver.get("https://roadpolice.am/en")
         await asyncio.sleep(2) 
         button_span = WebDriverWait(driver, 20).until(
             EC.element_to_be_clickable(
