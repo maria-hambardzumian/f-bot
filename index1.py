@@ -244,7 +244,7 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         )
                     )
                     next_month_button.click()
-                    await asyncio.sleep(2)
+                    await asyncio.sleep(10)
                 else:
                     break
 
