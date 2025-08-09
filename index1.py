@@ -160,6 +160,7 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         (By.CSS_SELECTOR, "div.flatpickr-calendar.open .flatpickr-days .dayContainer")
                     )
                 )
+                await asyncio.sleep(1) 
                 days = day_container.find_elements(By.CSS_SELECTOR, "span")
 
                 found_next_month_day = False
@@ -171,9 +172,9 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         await asyncio.sleep(0.3) 
                         continue
 
-                    # elif "nextMonthDay" in classes:
-                    #     found_next_month_day = True
-                    #     break
+                    elif "nextMonthDay" in classes:
+                        found_next_month_day = True
+                        break
 
                     else:
                         aria_label = day.get_attribute("aria-label")
