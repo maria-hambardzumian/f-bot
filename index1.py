@@ -202,12 +202,16 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         
                         # Parse the datetime string
                         
+                        # Clean and parse the text
+                        cleaned_text = inner_text.strip()  # Remove any whitespace or newlines
+                        
                         # Format: "hh:mmdd-mm-yyyy"
-                        time_part = inner_text[:5]  # "14:10"
-                        date_part = inner_text[5:]  # "04-09-2025"
+                        time_part = cleaned_text[:5]  # "14:10"
+                        date_part = cleaned_text[5:]  # "04-09-2025"
                         
                         # Parse the existing date
-                        datetime_str = f"{date_part} {time_part}"
+                        datetime_str = f"{date_part.strip()} {time_part.strip()}"  # Ensure no extra whitespace
+                        print(f"Attempting to parse datetime string: '{datetime_str}'")  # Debug print
                         parsed_datetime = datetime.strptime(datetime_str, "%d-%m-%Y %H:%M")
                         formatted_date = parsed_datetime.strftime("%Y-%m-%d %H:%M")
                         print("Parsed datetime:", formatted_date)
