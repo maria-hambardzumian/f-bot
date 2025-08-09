@@ -249,7 +249,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def main():
     # Get token from environment variable
     token = os.getenv('TELEGRAM_TOKEN')
-    chat_id = os.getenv('CHAT_ID')
+    chat_id = os.getenv('TELEGRAM_SCHEDULE_CHAT_ID')
     
     if not token or not chat_id:
         print("Error: TELEGRAM_TOKEN and CHAT_ID environment variables must be set")
