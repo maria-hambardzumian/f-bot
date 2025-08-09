@@ -30,7 +30,7 @@ jobs:
     - name: Run date checker
       env:
         TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-        CHAT_ID: ${{ secrets.CHAT_ID }}
+        CHAT_ID: ${{ secrets.TELEGRAM_SCHEDULE_CHAT_ID }}
         NUMBER1: ${{ secrets.NUMBER1 }}
         NUMBER2: ${{ secrets.NUMBER2 }}
       run: |
