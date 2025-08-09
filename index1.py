@@ -2,7 +2,7 @@ import io
 import os
 import asyncio
 import sys # Import sys to access command-line arguments
-
+from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -175,29 +175,66 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     #     break
 
                     else:
-                        # aria_label = day.get_attribute("aria-label")
+                        aria_label = day.get_attribute("aria-label")
                         day.click()
-                        await asyncio.sleep(5)
-                        closest = WebDriverWait(driver, 10).until(
-                                    EC.element_to_be_clickable((By.CSS_SELECTOR, "#nearest-day-submit"))
-                                )
-                        closest.click()
-                        await asyncio.sleep(8)
+                        await asyncio.sleep(10)
+                        
+                        hour_element = WebDriverWait(driver, 10).until(
+                            EC.presence_of_element_located((By.CSS_SELECTOR, "#select2-hour-input-container"))
+                        )
+                        hour_text = hour_element.text
+                        await asyncio.sleep(2)  # Wait 2 seconds
+                        
+                        # Combine aria_label (date) with hour_text
+                        date_obj = datetime.strptime(aria_label, "%B %d, %Y")  # Parse aria_label
+                        formatted_date = date_obj.strftime("%d-%m-%Y")  # Format as dd-mm-yyyy
+                        combined_datetime = f"{hour_text}{formatted_date}"  # Combine hour and date
+                        print("Combined datetime:", combined_datetime)
+
+                        
+                        element = WebDriverWait(driver, 10).until(
+                            EC.presence_of_element_located((By.CSS_SELECTOR, 
+                                "body > div.wrapper > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register-search-history > form > div.table-box.scroller-block > table > tbody > tr > td:nth-child(2)"))
+                        )
+                        inner_text = element.text
+                        print("Found text:", inner_text)
+                        
+                        # Parse the datetime string
+                        
+                        # Format: "hh:mmdd-mm-yyyy"
+                        time_part = inner_text[:5]  # "14:10"
+                        date_part = inner_text[5:]  # "04-09-2025"
+                        
+                        # Parse the existing date
+                        datetime_str = f"{date_part} {time_part}"
+                        parsed_datetime = datetime.strptime(datetime_str, "%d-%m-%Y %H:%M")
+                        formatted_date = parsed_datetime.strftime("%Y-%m-%d %H:%M")
+                        print("Parsed datetime:", formatted_date)
+                        
+                        # Parse the combined (selected) date
+                        combined_datetime_obj = datetime.strptime(combined_datetime, "%H:%M%d-%m-%Y")
+                        
                         screenshot = driver.get_screenshot_as_png()
                         bio = io.BytesIO(screenshot)
                         bio.name = "valid_date.png"
+                        
+                        # Format dates in a more readable way
+                        parsed_datetime_text = parsed_datetime.strftime("%B %d, %Y at %I:%M %p")
+                        combined_datetime_text = combined_datetime_obj.strftime("%B %d, %Y at %I:%M %p")
 
-                        if update:
-                            await update.message.reply_photo(
-                                photo=bio,
-                                caption=f"Առաջին հասանելի օրն է՝"
-                            )
+                        # First send the submitted date
+                        await update.message.reply_text(f"📅 Your submitted date: {parsed_datetime_text}")
+                        
+                        # Then prepare the caption for the comparison result
+                        if parsed_datetime > combined_datetime_obj:
+                            caption = f"🟢 New earlier date available!\n\nClosest available date:\n{combined_datetime_text}"
                         else:
-                            # This now uses the mocked reply_photo method provided by ScheduledUpdate
-                            await update.message.reply_photo(
-                                photo=bio,
-                                caption=f"[Scheduled] Առաջին հասանելի օրն է՝"
-                            )
+                            caption = f"✓ Submitted date is the earliest\n\nClosest available date:\n{combined_datetime_text}"
+                            
+                        await update.message.reply_photo(
+                            photo=bio,
+                            caption=caption
+                        )
                         return
 
                 if found_next_month_day:
