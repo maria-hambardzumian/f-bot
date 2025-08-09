@@ -180,16 +180,16 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         day.click()
                         await asyncio.sleep(10)
                         
-                        hour_element = WebDriverWait(driver, 10).until(
+                        hour_element = WebDriverWait(driver, 20).until(
                             EC.presence_of_element_located((By.CSS_SELECTOR, "#select2-hour-input-container"))
                         )
                         hour_text = hour_element.text
-                        await asyncio.sleep(2)  # Wait 2 seconds
+                        # Wait 2 seconds
                         
                         # Debug: Print and send raw values
                         await update.message.reply_text(f"Debug - Raw aria_label: {aria_label}")
                         await update.message.reply_text(f"Debug - Raw hour_text: {hour_text}")
-                        
+                        await asyncio.sleep(2) 
                         # Parse and combine date with hour_text
                         date_obj = datetime.strptime(aria_label, "%B %d, %Y")  # Parse aria_label
                         formatted_date = date_obj.strftime("%d-%m-%Y")  # Format as dd-mm-yyyy
