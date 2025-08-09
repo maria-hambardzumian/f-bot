@@ -249,7 +249,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def main():
     # Get token from environment variable
     token = os.getenv('TELEGRAM_TOKEN')
-    chat_id = os.getenv('TELEGRAM_SCHEDULE_CHAT_ID')
+    chat_id = os.getenv('CHAT_ID')
     
     if not token or not chat_id:
         print("Error: TELEGRAM_TOKEN and CHAT_ID environment variables must be set")
@@ -262,30 +262,24 @@ async def main():
         print("Running in GitHub Actions...")
         from telegram import Message, Chat
         
-        # Create a mock chat
-        chat = Chat(id=int(chat_id), type='private')
-        
-        # Create a mock message with the required methods
-        message = Message(
-            message_id=1,
-            date=datetime.now(),
-            chat=chat,
-        )
-        
-        # Add the custom reply methods
-        async def mock_reply_text(text, *args, **kwargs):
-            print(f"Bot would send: {text}")
-            return None
+        class MockMessage:
+            async def reply_text(self, text, *args, **kwargs):
+                print(f"Bot would send: {text}")
+                return None
 
-        async def mock_reply_photo(photo, caption=None, *args, **kwargs):
-            print(f"Bot would send photo with caption: {caption}")
-            return None
+            async def reply_photo(self, photo, caption=None, *args, **kwargs):
+                print(f"Bot would send photo with caption: {caption}")
+                return None
+                
+            @property
+            def chat_id(self):
+                return int(chat_id)
 
-        message.reply_text = mock_reply_text
-        message.reply_photo = mock_reply_photo
-        
-        # Create the update with our mock message
-        update = Update(update_id=1, message=message)
+        # Create mock update with our custom message
+        update = type('MockUpdate', (), {
+            'message': MockMessage(),
+            'effective_chat': type('MockChat', (), {'id': int(chat_id)})
+        })
         await check(update, None)
     else:
         # Normal bot operation for local development
@@ -297,3 +291,4 @@ async def main():
 
 if __name__ == '__main__':
     asyncio.run(main())
+
