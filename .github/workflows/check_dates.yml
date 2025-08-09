@@ -34,4 +34,4 @@ jobs:
         NUMBER1: ${{ secrets.NUMBER1 }}
         NUMBER2: ${{ secrets.NUMBER2 }}
       run: |
-        python bot/_.py
+        python _.py
