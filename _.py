@@ -25,13 +25,19 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--window-size=1728,992")
     
-    # Set binary location for Chrome in GitHub Actions
-    if os.getenv('GITHUB_ACTIONS'):
-        chrome_options.binary_location = "/usr/bin/google-chrome"
-    
-    driver = webdriver.Chrome(options=chrome_options)
+    try:
+        # Create service object
+        service = Service()
+        
+        # Create driver with service and options
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        
+        print("Chrome and ChromeDriver initialized successfully")
+    except Exception as e:
+        print(f"Error initializing Chrome: {str(e)}")
+        raise
     try:
         driver.set_window_size(1728, 992)
         driver.get("https://roadpolice.am/en")
