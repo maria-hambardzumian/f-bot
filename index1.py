@@ -190,10 +190,14 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         await update.message.reply_text(f"Debug - Raw aria_label: {aria_label}")
                         await update.message.reply_text(f"Debug - Raw hour_text: {hour_text}")
                         
-                        # Combine aria_label (date) with hour_text
+                        # Parse and combine date with hour_text
                         date_obj = datetime.strptime(aria_label, "%B %d, %Y")  # Parse aria_label
                         formatted_date = date_obj.strftime("%d-%m-%Y")  # Format as dd-mm-yyyy
-                        combined_datetime = f"{hour_text}{formatted_date}"  # Combine hour and date
+                        # Ensure hour_text is in HH:MM format and combine with date
+                        hour_text = hour_text.strip()  # Remove any whitespace
+                        if ':' not in hour_text:  # Add minutes if missing
+                            hour_text = f"{hour_text}:00"
+                        combined_datetime = f"{hour_text} {formatted_date}"  # Combine with space between
                         await update.message.reply_text(f"Debug - Combined datetime: {combined_datetime}")
                         
                         element = WebDriverWait(driver, 10).until(
@@ -206,13 +210,16 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         # Parse the datetime string
                         await update.message.reply_text(f"Debug - Raw inner_text: '{inner_text}'")
                         
-                        # Clean and parse the text
-                        cleaned_text = inner_text.strip()  # Remove any whitespace or newlines
-                        await update.message.reply_text(f"Debug - Cleaned text: '{cleaned_text}'")
-                        
-                        # Format: "hh:mmdd-mm-yyyy"
-                        time_part = cleaned_text[:5]  # "14:10"
-                        date_part = cleaned_text[5:]  # "04-09-2025"
+                        # Clean and parse the text by handling possible newlines
+                        parts = inner_text.strip().split('\n')  # Split by newlines
+                        if len(parts) == 2:
+                            time_part = parts[0].strip()  # First line contains time
+                            date_part = parts[1].strip()  # Second line contains date
+                        else:
+                            # If no newline, try the original approach
+                            cleaned_text = inner_text.strip()
+                            time_part = cleaned_text[:5]  # "14:10"
+                            date_part = cleaned_text[5:]  # "04-09-2025"
                         await update.message.reply_text(f"Debug - Time part: '{time_part}'")
                         await update.message.reply_text(f"Debug - Date part: '{date_part}'")
                         
@@ -226,7 +233,7 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             
                             # Parse the combined (selected) date
                             await update.message.reply_text(f"Debug - Combined datetime to parse: '{combined_datetime}'")
-                            combined_datetime_obj = datetime.strptime(combined_datetime, "%H:%M%d-%m-%Y")
+                            combined_datetime_obj = datetime.strptime(combined_datetime, "%H:%M %d-%m-%Y")
                             await update.message.reply_text(f"Debug - Successfully parsed combined datetime")
                         except ValueError as e:
                             await update.message.reply_text(f"Debug - Date parsing error: {str(e)}")
