@@ -21,11 +21,15 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Configure Chrome options for headless environment
     chrome_options = Options()
-    chrome_options.add_argument("--headless")  # Ensure GUI is not required
+    chrome_options.add_argument("--headless=new")  # Use new headless mode
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1080")
+    
+    # Set binary location for Chrome in GitHub Actions
+    if os.getenv('GITHUB_ACTIONS'):
+        chrome_options.binary_location = "/usr/bin/google-chrome"
     
     driver = webdriver.Chrome(options=chrome_options)
     try:
