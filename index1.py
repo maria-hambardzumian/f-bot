@@ -160,7 +160,6 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         (By.CSS_SELECTOR, "div.flatpickr-calendar.open .flatpickr-days .dayContainer")
                     )
                 )
-                await asyncio.sleep(1) 
                 days = day_container.find_elements(By.CSS_SELECTOR, "span")
 
                 found_next_month_day = False
@@ -181,23 +180,38 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         day.click()
                         await asyncio.sleep(10)
                         
-                        hour_element = WebDriverWait(driver, 20).until(
+                        hour_element = WebDriverWait(driver, 10).until(
                             EC.presence_of_element_located((By.CSS_SELECTOR, "#select2-hour-input-container"))
                         )
                         hour_text = hour_element.text
-                        # Wait 2 seconds
+                        await asyncio.sleep(2)  # Wait 2 seconds
+                        
+                        # Take screenshot of the hour selection
+                        hour_screenshot = driver.get_screenshot_as_png()
+                        hour_bio = io.BytesIO(hour_screenshot)
+                        hour_bio.name = "hour_selection.png"
+                        await update.message.reply_photo(
+                            photo=hour_bio,
+                            caption=f"Debug - Hour selection state\nRaw hour_text: '{hour_text}'"
+                        )
                         
                         # Debug: Print and send raw values
                         await update.message.reply_text(f"Debug - Raw aria_label: {aria_label}")
                         await update.message.reply_text(f"Debug - Raw hour_text: {hour_text}")
-                        await asyncio.sleep(2) 
+                        
                         # Parse and combine date with hour_text
                         date_obj = datetime.strptime(aria_label, "%B %d, %Y")  # Parse aria_label
                         formatted_date = date_obj.strftime("%d-%m-%Y")  # Format as dd-mm-yyyy
                         # Ensure hour_text is in HH:MM format and combine with date
+                        await update.message.reply_text(f"Debug - Before processing hour_text: '{hour_text}'")
                         hour_text = hour_text.strip()  # Remove any whitespace
+                        await update.message.reply_text(f"Debug - After strip hour_text: '{hour_text}'")
+                        
                         if ':' not in hour_text:  # Add minutes if missing
-                            hour_text = f"{hour_text}:00"
+                            if hour_text.isdigit():  # Only add :00 if we have a valid hour
+                                hour_text = f"{hour_text}:00"
+                            await update.message.reply_text(f"Debug - After adding minutes hour_text: '{hour_text}'")
+                        
                         combined_datetime = f"{hour_text} {formatted_date}"  # Combine with space between
                         await update.message.reply_text(f"Debug - Combined datetime: {combined_datetime}")
                         
