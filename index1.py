@@ -167,13 +167,13 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 for day in days:
                     classes = day.get_attribute("class") or ""
 
-                    if "flatpickr-disabled" in classes:
-                        await asyncio.sleep(0.3) 
+                    if "flatpickr-disabled" in classes or "prevMonthDay" in classes:
                         continue
 
                     elif "nextMonthDay" in classes:
                         found_next_month_day = True
                         break
+
 
                     else:
                         aria_label = day.get_attribute("aria-label")
@@ -284,7 +284,7 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         )
                     )
                     next_month_button.click()
-                    await asyncio.sleep(10)
+                    await asyncio.sleep(15)
                 else:
                     break
 
