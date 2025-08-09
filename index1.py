@@ -190,40 +190,26 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         hour_screenshot = driver.get_screenshot_as_png()
                         hour_bio = io.BytesIO(hour_screenshot)
                         hour_bio.name = "hour_selection.png"
-                        await update.message.reply_photo(
-                            photo=hour_bio,
-                            caption=f"Debug - Hour selection state\nRaw hour_text: '{hour_text}'"
-                        )
-                        
-                        # Debug: Print and send raw values
-                        await update.message.reply_text(f"Debug - Raw aria_label: {aria_label}")
-                        await update.message.reply_text(f"Debug - Raw hour_text: {hour_text}")
                         
                         # Parse and combine date with hour_text
                         date_obj = datetime.strptime(aria_label, "%B %d, %Y")  # Parse aria_label
                         formatted_date = date_obj.strftime("%d-%m-%Y")  # Format as dd-mm-yyyy
                         # Ensure hour_text is in HH:MM format and combine with date
-                        await update.message.reply_text(f"Debug - Before processing hour_text: '{hour_text}'")
                         hour_text = hour_text.strip()  # Remove any whitespace
-                        await update.message.reply_text(f"Debug - After strip hour_text: '{hour_text}'")
                         
                         if ':' not in hour_text:  # Add minutes if missing
                             if hour_text.isdigit():  # Only add :00 if we have a valid hour
                                 hour_text = f"{hour_text}:00"
-                            await update.message.reply_text(f"Debug - After adding minutes hour_text: '{hour_text}'")
                         
                         combined_datetime = f"{hour_text} {formatted_date}"  # Combine with space between
-                        await update.message.reply_text(f"Debug - Combined datetime: {combined_datetime}")
-                        
+
                         element = WebDriverWait(driver, 10).until(
                             EC.presence_of_element_located((By.CSS_SELECTOR, 
                                 "body > div.wrapper > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register-search-history > form > div.table-box.scroller-block > table > tbody > tr > td:nth-child(2)"))
                         )
                         inner_text = element.text
-                        print("Found text:", inner_text)
                         
                         # Parse the datetime string
-                        await update.message.reply_text(f"Debug - Raw inner_text: '{inner_text}'")
                         
                         # Clean and parse the text by handling possible newlines
                         parts = inner_text.strip().split('\n')  # Split by newlines
@@ -235,21 +221,15 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             cleaned_text = inner_text.strip()
                             time_part = cleaned_text[:5]  # "14:10"
                             date_part = cleaned_text[5:]  # "04-09-2025"
-                        await update.message.reply_text(f"Debug - Time part: '{time_part}'")
-                        await update.message.reply_text(f"Debug - Date part: '{date_part}'")
                         
                         try:
                             # Parse the existing date
                             datetime_str = f"{date_part.strip()} {time_part.strip()}"
-                            await update.message.reply_text(f"Debug - Datetime string to parse: '{datetime_str}'")
                             parsed_datetime = datetime.strptime(datetime_str, "%d-%m-%Y %H:%M")
                             formatted_date = parsed_datetime.strftime("%Y-%m-%d %H:%M")
-                            await update.message.reply_text(f"Debug - Successfully parsed datetime: {formatted_date}")
                             
                             # Parse the combined (selected) date
-                            await update.message.reply_text(f"Debug - Combined datetime to parse: '{combined_datetime}'")
                             combined_datetime_obj = datetime.strptime(combined_datetime, "%H:%M %d-%m-%Y")
-                            await update.message.reply_text(f"Debug - Successfully parsed combined datetime")
                         except ValueError as e:
                             await update.message.reply_text(f"Debug - Date parsing error: {str(e)}")
                             raise
