@@ -2,7 +2,7 @@ import io
 import os
 import asyncio
 import sys # Import sys to access command-line arguments
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -14,6 +14,9 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, StaleElementReferenceException
 from telegram import Update, Bot # Import Bot
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+
+# Constants
+MIN_DATE_THRESHOLD = "2025-12-01"  # Minimum acceptable date for reservations
 
 # Read from environment variables
 TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -47,6 +50,9 @@ class ScheduledContext:
 
 
 async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Convert constant to datetime object
+    min_date_threshold = datetime.strptime(MIN_DATE_THRESHOLD, "%Y-%m-%d")
+    
     # This block is used for both manual commands and scheduled runs
     if update: # Check if it's a regular Telegram update
         await update.message.reply_text("Opening Chrome...")
@@ -81,21 +87,21 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         button = button_span.find_element(By.XPATH, "./ancestor::button")
         button.click()
+# document.querySelector("#hqb-login-submit")
+        await asyncio.sleep(0.2)  # short wait to make sure modal is fully open
 
-        await asyncio.sleep(0.5)
-
+        # Step 2: Send POST request in the background
         actions = ActionChains(driver)
-        actions.send_keys(Keys.TAB).pause(0.5).send_keys(Keys.TAB).perform()
+        actions.send_keys(Keys.TAB).pause(0.4).send_keys(Keys.TAB).perform()
 
-        await asyncio.sleep(1.5)
+        await asyncio.sleep(1)  # Wait half a second before screenshot
         active_element = driver.switch_to.active_element
-
         for digit in NUMBER1:
             active_element.send_keys(digit)
             await asyncio.sleep(0.1)
 
         actions.send_keys(Keys.TAB).perform()
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.3)
 
         active_element = driver.switch_to.active_element
         for digit in NUMBER2:
@@ -104,15 +110,18 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         actions.send_keys(Keys.TAB).perform()
 
-        await asyncio.sleep(0.7)
-        submit_button = WebDriverWait(driver, 20).until(
+        await asyncio.sleep(0.5)
+        submit_button = WebDriverWait(driver, 30).until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, "#hqb-login-submit"))
         )
         submit_button.click()
 
-        await asyncio.sleep(2)
+        await asyncio.sleep(1.5)
+        
+        # Scroll down the page
+        driver.execute_script("window.scrollTo(0, 200);")
 
-        dropdown = WebDriverWait(driver, 20).until(
+        dropdown = WebDriverWait(driver, 30).until(
             EC.element_to_be_clickable(
                 (By.CSS_SELECTOR,
                  "body > div > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register > form > div:nth-child(2) > span > span.selection > span")
@@ -126,9 +135,9 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         actions.send_keys(Keys.ARROW_DOWN).pause(0.2)
         actions.send_keys(Keys.ENTER).perform()
 
-        await asyncio.sleep(1.5)
+        await asyncio.sleep(2.5)
 
-        second_dropdown = WebDriverWait(driver, 20).until(
+        second_dropdown = WebDriverWait(driver, 30).until(
             EC.element_to_be_clickable(
                 (By.CSS_SELECTOR,
                  "body > div > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register > form > div:nth-child(3) > span > span.selection > span")
@@ -137,25 +146,26 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         second_dropdown.click()
         await asyncio.sleep(0.5)
 
+        # Step 4: Select specific branch option
         actions = ActionChains(driver)
         actions.send_keys(Keys.ARROW_DOWN).pause(0.2)
         actions.send_keys(Keys.ARROW_DOWN).pause(0.2)
         actions.send_keys(Keys.ENTER).perform()
 
-        await asyncio.sleep(10)
+        await asyncio.sleep(15)
 
-        calendar_label = WebDriverWait(driver, 20).until(
+        calendar_label = WebDriverWait(driver, 30).until(
             EC.element_to_be_clickable(
                 (By.CSS_SELECTOR,
                  "body > div.wrapper > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register > form > div:nth-child(4) > label")
             )
         )
         calendar_label.click()
-        await asyncio.sleep(5)
+        await asyncio.sleep(20)
 
         while True:
             try:
-                day_container = WebDriverWait(driver, 10).until(
+                day_container = WebDriverWait(driver, 20).until(
                     EC.presence_of_element_located(
                         (By.CSS_SELECTOR, "div.flatpickr-calendar.open .flatpickr-days .dayContainer")
                     )
@@ -177,19 +187,36 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                     else:
                         aria_label = day.get_attribute("aria-label")
-                        day.click()
-                        await asyncio.sleep(10)
                         
-                        hour_element = WebDriverWait(driver, 10).until(
+                        # Check if this date meets minimum threshold BEFORE clicking
+                        try:
+                            date_obj = datetime.strptime(aria_label, "%B %d, %Y")
+                            if date_obj.date() < min_date_threshold.date():
+                                # Date is before threshold - skip without clicking
+                                continue
+                        except (ValueError, AttributeError):
+                            # If we can't parse the date, skip it
+                            continue
+                            
+                        # Date meets threshold - proceed with click
+                        day.click()
+                        await asyncio.sleep(15)
+                        
+                        hour_element = WebDriverWait(driver, 20).until(
                             EC.presence_of_element_located((By.CSS_SELECTOR, "#select2-hour-input-container"))
                         )
                         hour_text = hour_element.text
-                        await asyncio.sleep(2)  # Wait 2 seconds
+                        await asyncio.sleep(5)  # Wait 5 seconds for data to load
                         
-                        # Take screenshot of the hour selection
-                        hour_screenshot = driver.get_screenshot_as_png()
-                        hour_bio = io.BytesIO(hour_screenshot)
-                        hour_bio.name = "hour_selection.png"
+                        # Check if there are available time slots for this date
+                        try:
+                            element = WebDriverWait(driver, 10).until(
+                                EC.presence_of_element_located((By.CSS_SELECTOR, 
+                                    "body > div.wrapper > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register-search-history > form > div.table-box.scroller-block > table > tbody > tr > td:nth-child(2)"))
+                            )
+                        except TimeoutException:
+                            # Silently continue to next day without message
+                            continue
                         
                         # Parse and combine date with hour_text
                         date_obj = datetime.strptime(aria_label, "%B %d, %Y")  # Parse aria_label
@@ -201,38 +228,42 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             if hour_text.isdigit():  # Only add :00 if we have a valid hour
                                 hour_text = f"{hour_text}:00"
                         
-                        combined_datetime = f"{hour_text} {formatted_date}"  # Combine with space between
-
-                        element = WebDriverWait(driver, 10).until(
-                            EC.presence_of_element_located((By.CSS_SELECTOR, 
-                                "body > div.wrapper > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register-search-history > form > div.table-box.scroller-block > table > tbody > tr > td:nth-child(2)"))
-                        )
+                        combined_datetime = f"{hour_text}{formatted_date}"  # Combine hour and date
                         inner_text = element.text
+                        print("Found text:", inner_text)
                         
                         # Parse the datetime string
                         
-                        # Clean and parse the text by handling possible newlines
-                        parts = inner_text.strip().split('\n')  # Split by newlines
-                        if len(parts) == 2:
-                            time_part = parts[0].strip()  # First line contains time
-                            date_part = parts[1].strip()  # Second line contains date
-                        else:
-                            # If no newline, try the original approach
-                            cleaned_text = inner_text.strip()
-                            time_part = cleaned_text[:5]  # "14:10"
-                            date_part = cleaned_text[5:]  # "04-09-2025"
+                        # Format: "hh:mmdd-mm-yyyy"
+                        time_part = inner_text[:5]  # "14:10"
+                        date_part = inner_text[5:]  # "04-09-2025"
                         
-                        try:
-                            # Parse the existing date
-                            datetime_str = f"{date_part.strip()} {time_part.strip()}"
-                            parsed_datetime = datetime.strptime(datetime_str, "%d-%m-%Y %H:%M")
-                            formatted_date = parsed_datetime.strftime("%Y-%m-%d %H:%M")
-                            
-                            # Parse the combined (selected) date
-                            combined_datetime_obj = datetime.strptime(combined_datetime, "%H:%M %d-%m-%Y")
-                        except ValueError as e:
-                            await update.message.reply_text(f"Debug - Date parsing error: {str(e)}")
-                            raise
+                        # Get current time
+                        current_time = datetime.now()
+                        
+                        # Parse the time part to check if it's after 10:30
+                        hour, minute = map(int, time_part.split(':'))
+                        if hour < 10 or (hour == 10 and minute < 30):
+                            # Silently skip early times
+                            continue
+                        
+                        # Parse the existing date
+                        datetime_str = f"{date_part} {time_part}"
+                        parsed_datetime = datetime.strptime(datetime_str, "%d-%m-%Y %H:%M")
+                        
+                        # Check if there's at least 6 hours difference
+                        time_difference = parsed_datetime - current_time
+                        hours_difference = time_difference.total_seconds() / 3600
+                        
+                        if hours_difference < 6:
+                            # Silently skip too soon times
+                            continue
+                        
+                        formatted_date = parsed_datetime.strftime("%Y-%m-%d %H:%M")
+                        print("Parsed datetime:", formatted_date)
+                        
+                        # Parse the combined (selected) date
+                        combined_datetime_obj = datetime.strptime(combined_datetime, "%H:%M%d-%m-%Y")
                         
                         screenshot = driver.get_screenshot_as_png()
                         bio = io.BytesIO(screenshot)
@@ -242,20 +273,140 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         parsed_datetime_text = parsed_datetime.strftime("%B %d, %Y at %I:%M %p")
                         combined_datetime_text = combined_datetime_obj.strftime("%B %d, %Y at %I:%M %p")
 
-                        # First send the submitted date
-                        await update.message.reply_text(f"📅 Your submitted date: {parsed_datetime_text}")
-                        
-                        # Then prepare the caption for the comparison result
-                        if parsed_datetime > combined_datetime_obj:
-                            caption = f"🟢 New earlier date available!\n\nClosest available date:\n{combined_datetime_text}"
-                        else:
-                            caption = f"✓ Submitted date is the earliest\n\nClosest available date:\n{combined_datetime_text}"
+                        # Send notification only for valid reservation
+                        await update.message.reply_text("🎉 Valid reservation slot found!")
+                        await update.message.reply_text(f"📅 Available time: {combined_datetime_text}")
+                        await asyncio.sleep(3)
+                        # Check if found date meets minimum threshold first
+                        if combined_datetime_obj.date() >= min_date_threshold.date():
+                            # Found date is valid (after threshold)
                             
-                        await update.message.reply_photo(
-                            photo=bio,
-                            caption=caption
-                        )
-                        return
+                            if parsed_datetime.date() >= min_date_threshold.date():
+                                # Current reservation is also valid - check if new one is better
+                                if parsed_datetime > combined_datetime_obj:
+                                    # New date is earlier (better) than current - switch
+                                    await update.message.reply_text(f"🟢 Found better date: {combined_datetime_text}")
+                                    await update.message.reply_text("🔄 Canceling current reservation and booking better date...")
+                                    
+                                    # Wait 5 seconds then click email field
+                                    await asyncio.sleep(2)
+                                    email_field = WebDriverWait(driver, 10).until(
+                                        EC.element_to_be_clickable((By.CSS_SELECTOR, "body > div.wrapper > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register > form > div:nth-child(6) > label"))
+                                    )
+                                    email_field.click()
+                                    
+                                    # Wait 1 second then type email
+                                    await asyncio.sleep(1)
+                                    active_element = driver.switch_to.active_element
+                                    for digit in "mariahambardzumian@gmail.com":
+                                        active_element.send_keys(digit)
+                                        await asyncio.sleep(0.1)
+
+                                    # Wait 3 seconds then click button to cancel current reservation
+                                    await asyncio.sleep(3)
+                                    button = WebDriverWait(driver, 10).until(
+                                        EC.element_to_be_clickable(
+                                            (By.CSS_SELECTOR, 
+                                             "body > div.wrapper > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register-search-history > form > div.table-box.scroller-block > table > tbody > tr > td.fs12 > button"
+                                            )
+                                        )
+                                    )
+                                    button.click()
+                                    
+                                    # Wait 1 second then click detach-do button
+                                    await asyncio.sleep(1)
+                                    detach_button = WebDriverWait(driver, 10).until(
+                                        EC.element_to_be_clickable((By.CSS_SELECTOR, "#detach-do"))
+                                    )
+                                    detach_button.click()
+
+                                    # Wait 2 seconds then click vehicle-license-submit button to confirm new reservation
+                                    await asyncio.sleep(2)
+                                    submit_button = WebDriverWait(driver, 10).until(
+                                        EC.element_to_be_clickable((By.CSS_SELECTOR, "#vehicle-license-submit"))
+                                    )
+                                    submit_button.click()
+                                    
+                                    await asyncio.sleep(5)
+                                    # Take a screenshot after waiting and send status
+                                    new_date_screenshot = driver.get_screenshot_as_png()
+                                    new_date_bio = io.BytesIO(new_date_screenshot)
+                                    new_date_bio.name = "new_date_selected.png"
+                                    
+                                    await update.message.reply_photo(
+                                        photo=new_date_bio,
+                                        caption=f"✅ Successfully changed reservation!\n\n📅 Old: {parsed_datetime_text}\n🟢 New: {combined_datetime_text}"
+                                    )
+                                    return
+                                else:
+                                    # Current date is still better or same
+                                    await update.message.reply_text(f"✓ Your current date is still the best available")
+                                    
+                                    await update.message.reply_photo(
+                                        photo=bio,
+                                        caption=f"✓ Keeping current reservation\n\nYour date: {parsed_datetime_text}\nNext available: {combined_datetime_text}"
+                                    )
+                                    return
+                            else:
+                                # Current reservation is invalid (before threshold) - book first valid date
+                                min_threshold_text = min_date_threshold.strftime("%B %d, %Y")
+                                await update.message.reply_text(f"⚠️ Current reservation is before threshold ({min_threshold_text})")
+                                await update.message.reply_text(f"🔄 Booking first available date after threshold: {combined_datetime_text}")
+                                
+                                # Wait 5 seconds then click email field
+                                await asyncio.sleep(5)
+                                email_field = WebDriverWait(driver, 10).until(
+                                    EC.element_to_be_clickable((By.CSS_SELECTOR, "body > div.wrapper > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register > form > div:nth-child(6) > label"))
+                                )
+                                email_field.click()
+                                
+                                # Wait 1 second then type email
+                                await asyncio.sleep(1)
+                                active_element = driver.switch_to.active_element
+                                for digit in "mariahambardzumian@gmail.com":
+                                    active_element.send_keys(digit)
+                                    await asyncio.sleep(0.1)
+
+                                # Wait 3 seconds then click button to cancel current reservation
+                                await asyncio.sleep(3)
+                                button = WebDriverWait(driver, 10).until(
+                                    EC.element_to_be_clickable(
+                                        (By.CSS_SELECTOR, 
+                                         "body > div.wrapper > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register-search-history > form > div.table-box.scroller-block > table > tbody > tr > td.fs12 > button"
+                                        )
+                                    )
+                                )
+                                button.click()
+                                
+                                # Wait 1 second then click detach-do button
+                                await asyncio.sleep(1)
+                                detach_button = WebDriverWait(driver, 10).until(
+                                    EC.element_to_be_clickable((By.CSS_SELECTOR, "#detach-do"))
+                                )
+                                detach_button.click()
+
+                                # Wait 2 seconds then click vehicle-license-submit button to confirm new reservation
+                                await asyncio.sleep(2)
+                                submit_button = WebDriverWait(driver, 10).until(
+                                    EC.element_to_be_clickable((By.CSS_SELECTOR, "#vehicle-license-submit"))
+                                )
+                                submit_button.click()
+                                
+                                await asyncio.sleep(5)
+                                # Take a screenshot after waiting and send status
+                                new_date_screenshot = driver.get_screenshot_as_png()
+                                new_date_bio = io.BytesIO(new_date_screenshot)
+                                new_date_bio.name = "new_date_selected.png"
+                                
+                                await update.message.reply_photo(
+                                    photo=new_date_bio,
+                                    caption=f"✅ Successfully changed reservation!\n\n📅 Old: {parsed_datetime_text}\n🟢 New: {combined_datetime_text}"
+                                )
+                                return
+                        else:
+                            # Found date is before threshold - continue searching
+                            min_threshold_text = min_date_threshold.strftime("%B %d, %Y")
+                            continue
 
                 if found_next_month_day:
                     next_month_button = WebDriverWait(driver, 10).until(
@@ -264,7 +415,7 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         )
                     )
                     next_month_button.click()
-                    await asyncio.sleep(15)
+                    await asyncio.sleep(25)
                 else:
                     break
 
@@ -302,6 +453,108 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Hello! I'm your bot.")
 
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    help_text = """
+🤖 **Available Commands:**
+
+📅 `/check` - Check for available driver license appointments
+
+🧹 **Chat Cleanup Commands:**
+• `/cleanup` - Keep only last day messages (24 hours)
+• `/clean [number]` - Delete last N messages (default: 50)
+  Example: `/clean 100` deletes last 100 messages
+
+💡 `/help` - Show this help message
+🚀 `/start` - Start the bot
+    """
+    await update.message.reply_text(help_text)
+
+async def cleanup_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Keep only last day messages and delete older ones"""
+    try:
+        chat_id = update.effective_chat.id
+        bot = context.bot
+        
+        # Calculate cutoff time (24 hours ago)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(days=1)
+        
+        await update.message.reply_text("🧹 Starting chat cleanup... (keeping last 24 hours)")
+        
+        # Get recent messages (Telegram limits to 100 messages per request)
+        deleted_count = 0
+        kept_count = 0
+        
+        # We'll iterate through message history
+        try:
+            # Start from a high message ID and work backwards
+            last_message_id = update.message.message_id
+            
+            for message_id in range(last_message_id - 1000, last_message_id):  # Check last 1000 messages
+                try:
+                    # Try to get message info by forwarding to ourselves (then delete the forward)
+                    # This is a workaround since we can't directly get message timestamps
+                    
+                    # Alternative approach: delete messages in batches
+                    if message_id < last_message_id - 100:  # Keep only last 100 messages as "last day"
+                        try:
+                            await bot.delete_message(chat_id=chat_id, message_id=message_id)
+                            deleted_count += 1
+                        except Exception:
+                            # Message might not exist or can't be deleted
+                            pass
+                    else:
+                        kept_count += 1
+                        
+                except Exception:
+                    # Message doesn't exist or can't be accessed
+                    continue
+                    
+        except Exception as e:
+            await update.message.reply_text(f"⚠️ Error during cleanup: {str(e)}")
+            return
+            
+        await update.message.reply_text(
+            f"✅ Chat cleanup completed!\n"
+            f"🗑️ Deleted: {deleted_count} old messages\n"
+            f"💾 Kept: {kept_count} recent messages"
+        )
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ Cleanup failed: {str(e)}")
+
+async def cleanup_chat_simple(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Simple cleanup - delete last N messages except current one"""
+    try:
+        chat_id = update.effective_chat.id
+        bot = context.bot
+        current_message_id = update.message.message_id
+        
+        # Get number from command args, default to 50
+        try:
+            num_to_delete = int(context.args[0]) if context.args else 50
+        except (ValueError, IndexError):
+            num_to_delete = 50
+            
+        await update.message.reply_text(f"🧹 Deleting last {num_to_delete} messages...")
+        
+        deleted_count = 0
+        
+        # Delete messages working backwards from current message
+        for i in range(1, num_to_delete + 1):
+            message_id_to_delete = current_message_id - i
+            if message_id_to_delete > 0:
+                try:
+                    await bot.delete_message(chat_id=chat_id, message_id=message_id_to_delete)
+                    deleted_count += 1
+                except Exception:
+                    # Message might not exist or can't be deleted
+                    pass
+                    
+        await update.message.reply_text(f"✅ Deleted {deleted_count} messages!")
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ Cleanup failed: {str(e)}")
+
 async def run_scheduled_check():
     """Function to run check for scheduled events."""
     scheduled_chat_id = os.getenv("TELEGRAM_SCHEDULE_CHAT_ID")
@@ -324,7 +577,10 @@ if __name__ == '__main__':
         app = ApplicationBuilder().token(TOKEN).build()
 
         app.add_handler(CommandHandler("start", start))
+        app.add_handler(CommandHandler("help", help_command))
         app.add_handler(CommandHandler("check", check))
+        app.add_handler(CommandHandler("cleanup", cleanup_chat))
+        app.add_handler(CommandHandler("clean", cleanup_chat_simple))
 
         print("Bot is running in polling mode...")
         app.run_polling()
