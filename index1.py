@@ -69,6 +69,16 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Convert constant to datetime object
     min_date_threshold = datetime.strptime(MIN_DATE_THRESHOLD, "%Y-%m-%d")
     
+    # Validate environment variables
+    if not NUMBER1 or not NUMBER2:
+        await debug_log(update, f"Missing credentials - NUMBER1: {'SET' if NUMBER1 else 'MISSING'}, NUMBER2: {'SET' if NUMBER2 else 'MISSING'}")
+        error_msg = "❌ Bot configuration error: Missing NUMBER1 or NUMBER2 environment variables"
+        if update:
+            await update.message.reply_text(error_msg)
+        return
+    
+    await debug_log(update, f"Environment check - NUMBER1 length: {len(NUMBER1)}, NUMBER2 length: {len(NUMBER2)}")
+    
     # This block is used for both manual commands and scheduled runs
     if update: # Check if it's a regular Telegram update
         await update.message.reply_text("Opening Chrome...")
@@ -83,18 +93,32 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print("Warning: TELEGRAM_SCHEDULE_CHAT_ID not set for scheduled run.")
 
 
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--window-size=1920,1180")
+    try:
+        await debug_log(update, "Setting up Chrome options...")
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--disable-web-security")
+        chrome_options.add_argument("--disable-features=VizDisplayCompositor")
+        chrome_options.add_argument("--window-size=1920,1180")
+        chrome_options.add_argument("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
 
-    service = Service("/usr/bin/chromedriver")
-    driver = webdriver.Chrome(service=service, options=chrome_options)
+        await debug_log(update, "Starting ChromeDriver...")
+        service = Service("/usr/bin/chromedriver")
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        await debug_log(update, "ChromeDriver started successfully")
+    except Exception as e:
+        await debug_log(update, "Failed to start ChromeDriver", e)
+        raise
 
     try:
+        await debug_log(update, "Loading website...")
         driver.get("https://roadpolice.am/en")
-        await asyncio.sleep(2) 
+        await asyncio.sleep(2)
+        
+        await debug_log(update, "Looking for initial button...")
         button_span = WebDriverWait(driver, 20).until(
             EC.element_to_be_clickable(
                 (By.CSS_SELECTOR,
@@ -103,6 +127,7 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         button = button_span.find_element(By.XPATH, "./ancestor::button")
         button.click()
+        await debug_log(update, "Initial button clicked successfully")
 # document.querySelector("#hqb-login-submit")
         await asyncio.sleep(0.2)  # short wait to make sure modal is fully open
 
@@ -111,6 +136,7 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         actions.send_keys(Keys.TAB).pause(0.4).send_keys(Keys.TAB).perform()
 
         await asyncio.sleep(1)  # Wait half a second before screenshot
+        await debug_log(update, f"Entering first number: {NUMBER1}")
         active_element = driver.switch_to.active_element
         for digit in NUMBER1:
             active_element.send_keys(digit)
@@ -119,6 +145,7 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         actions.send_keys(Keys.TAB).perform()
         await asyncio.sleep(0.3)
 
+        await debug_log(update, f"Entering second number: {NUMBER2}")
         active_element = driver.switch_to.active_element
         for digit in NUMBER2:
             active_element.send_keys(digit)
@@ -127,22 +154,85 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         actions.send_keys(Keys.TAB).perform()
 
         await asyncio.sleep(0.5)
+        await debug_log(update, "Looking for submit button...")
         submit_button = WebDriverWait(driver, 30).until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, "#hqb-login-submit"))
         )
+        await debug_log(update, "Submit button found")
         submit_button.click()
+        await debug_log(update, "Login form submitted")
 
         await asyncio.sleep(1.5)
         
-        # Scroll down the page
-        driver.execute_script("window.scrollTo(0, 200);")
-
-        dropdown = WebDriverWait(driver, 30).until(
-            EC.element_to_be_clickable(
-                (By.CSS_SELECTOR,
-                 "body > div > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register > form > div:nth-child(2) > span > span.selection > span")
+        # Check if login was successful by looking for success indicators
+        await debug_log(update, "Checking login result...")
+        
+        try:
+            # Take a screenshot to see what happened
+            login_screenshot = driver.get_screenshot_as_png()
+            login_bio = io.BytesIO(login_screenshot)
+            login_bio.name = "after_login.png"
+            
+            # Check for error messages
+            try:
+                error_element = driver.find_element(By.CSS_SELECTOR, ".error, .alert, .warning")
+                error_text = error_element.text
+                await debug_log(update, f"Login error detected: {error_text}")
+                await update.message.reply_photo(photo=login_bio, caption=f"❌ Login failed: {error_text}")
+                return
+            except:
+                await debug_log(update, "No error messages found - login appears successful")
+            
+            # Wait for page to be ready
+            await debug_log(update, "Waiting for page to be ready...")
+            WebDriverWait(driver, 10).until(
+                lambda driver: driver.execute_script("return document.readyState") == "complete"
             )
-        )
+            await debug_log(update, "Page is ready")
+            
+            # Scroll down the page
+            driver.execute_script("window.scrollTo(0, 200);")
+            await debug_log(update, "Page scrolled down")
+            await asyncio.sleep(3)  # Wait for scroll to complete and page to update
+
+            await debug_log(update, "Looking for first dropdown...")
+            dropdown = WebDriverWait(driver, 30).until(
+                EC.element_to_be_clickable(
+                    (By.CSS_SELECTOR,
+                     "body > div > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register > form > div:nth-child(2) > span > span.selection > span")
+                )
+            )
+            await debug_log(update, "First dropdown found successfully")
+            
+        except TimeoutException:
+            await debug_log(update, "First dropdown not found - trying alternative selectors...")
+            # Try alternative selectors
+            alternative_selectors = [
+                "select[name*='service'], select[name*='type']",
+                ".select2-selection",
+                "span.selection",
+                "[id*='select2']"
+            ]
+            
+            dropdown = None
+            for selector in alternative_selectors:
+                try:
+                    await debug_log(update, f"Trying selector: {selector}")
+                    dropdown = WebDriverWait(driver, 5).until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
+                    )
+                    await debug_log(update, f"Found dropdown with selector: {selector}")
+                    break
+                except:
+                    continue
+            
+            if not dropdown:
+                await debug_log(update, "All dropdown selectors failed - taking debug screenshot")
+                debug_screenshot = driver.get_screenshot_as_png()
+                debug_bio = io.BytesIO(debug_screenshot)
+                debug_bio.name = "dropdown_not_found.png"
+                await update.message.reply_photo(photo=debug_bio, caption="❌ Could not find dropdown after login")
+                return
         dropdown.click()
 
         await asyncio.sleep(1)
