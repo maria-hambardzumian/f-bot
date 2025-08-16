@@ -116,7 +116,16 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         await debug_log(update, "Loading website...")
         driver.get("https://roadpolice.am/en")
-        await asyncio.sleep(2)
+        
+        # Wait 4 seconds as requested
+        await asyncio.sleep(4)
+        await debug_log(update, "Website loaded, waited 4 seconds")
+        
+        # Take screenshot of initial page
+        initial_screenshot = driver.get_screenshot_as_png()
+        initial_bio = io.BytesIO(initial_screenshot)
+        initial_bio.name = "01_initial_page.png"
+        await update.message.reply_photo(photo=initial_bio, caption="📸 Step 1: Initial page loaded")
         
         await debug_log(update, "Looking for initial button...")
         button_span = WebDriverWait(driver, 20).until(
@@ -128,6 +137,13 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         button = button_span.find_element(By.XPATH, "./ancestor::button")
         button.click()
         await debug_log(update, "Initial button clicked successfully")
+        
+        # Take screenshot of modal opened
+        await asyncio.sleep(1)
+        modal_screenshot = driver.get_screenshot_as_png()
+        modal_bio = io.BytesIO(modal_screenshot)
+        modal_bio.name = "02_modal_opened.png"
+        await update.message.reply_photo(photo=modal_bio, caption="📸 Step 2: Login modal opened")
 # document.querySelector("#hqb-login-submit")
         await asyncio.sleep(0.2)  # short wait to make sure modal is fully open
 
@@ -159,43 +175,93 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
             EC.element_to_be_clickable((By.CSS_SELECTOR, "#hqb-login-submit"))
         )
         await debug_log(update, "Submit button found")
+        
+        # Take screenshot before submitting
+        before_submit_screenshot = driver.get_screenshot_as_png()
+        before_submit_bio = io.BytesIO(before_submit_screenshot)
+        before_submit_bio.name = "03_before_submit.png"
+        await update.message.reply_photo(photo=before_submit_bio, caption="📸 Step 3: About to submit login form")
+        
         submit_button.click()
         await debug_log(update, "Login form submitted")
 
-        await asyncio.sleep(1.5)
+        # Wait longer for login to process
+        await asyncio.sleep(3)
         
-        # Check if login was successful by looking for success indicators
-        await debug_log(update, "Checking login result...")
+        # Take screenshot immediately after submit
+        after_submit_screenshot = driver.get_screenshot_as_png()
+        after_submit_bio = io.BytesIO(after_submit_screenshot)
+        after_submit_bio.name = "04_after_submit.png"
+        await update.message.reply_photo(photo=after_submit_bio, caption="📸 Step 4: After login form submitted")
+        
+        # Check if login was successful by waiting for modal to close
+        await debug_log(update, "Waiting for login modal to close...")
         
         try:
-            # Take a screenshot to see what happened
-            login_screenshot = driver.get_screenshot_as_png()
-            login_bio = io.BytesIO(login_screenshot)
-            login_bio.name = "after_login.png"
-            
-            # Check for error messages
-            try:
-                error_element = driver.find_element(By.CSS_SELECTOR, ".error, .alert, .warning")
-                error_text = error_element.text
-                await debug_log(update, f"Login error detected: {error_text}")
-                await update.message.reply_photo(photo=login_bio, caption=f"❌ Login failed: {error_text}")
-                return
-            except:
-                await debug_log(update, "No error messages found - login appears successful")
-            
-            # Wait for page to be ready
-            await debug_log(update, "Waiting for page to be ready...")
-            WebDriverWait(driver, 10).until(
-                lambda driver: driver.execute_script("return document.readyState") == "complete"
+            # Wait for the modal to disappear (indicating successful login)
+            WebDriverWait(driver, 15).until(
+                EC.invisibility_of_element_located((By.CSS_SELECTOR, ".modal, [role='dialog'], .popup"))
             )
-            await debug_log(update, "Page is ready")
+            await debug_log(update, "Login modal closed successfully")
+        except TimeoutException:
+            await debug_log(update, "Modal didn't close - checking what's still visible...")
             
-            # Scroll down the page
-            driver.execute_script("window.scrollTo(0, 200);")
-            await debug_log(update, "Page scrolled down")
-            await asyncio.sleep(3)  # Wait for scroll to complete and page to update
+        # Take screenshot to see current state
+        login_result_screenshot = driver.get_screenshot_as_png()
+        login_result_bio = io.BytesIO(login_result_screenshot)
+        login_result_bio.name = "05_login_result.png"
+        await update.message.reply_photo(photo=login_result_bio, caption="📸 Step 5: Login result")
+        
+        # Check for error messages or if we're still on login modal
+        try:
+            error_element = driver.find_element(By.CSS_SELECTOR, ".error, .alert, .warning, .text-danger")
+            error_text = error_element.text
+            await debug_log(update, f"Login error detected: {error_text}")
+            await update.message.reply_text(f"❌ Login failed: {error_text}")
+            return
+        except:
+            await debug_log(update, "No error messages found")
+            
+        # Check if we're still on the modal (login didn't work)
+        try:
+            modal_still_visible = driver.find_element(By.CSS_SELECTOR, "input[placeholder*='Document'], input[placeholder*='Phone'], .login-form, #login")
+            await debug_log(update, "Login modal still visible - login may have failed")
+            await update.message.reply_text("❌ Login modal still visible - credentials may be incorrect")
+            return
+        except:
+            await debug_log(update, "Login modal not visible - appears successful")
+            
+        # Check for CAPTCHA or verification requirements
+        try:
+            captcha_element = driver.find_element(By.CSS_SELECTOR, "[id*='captcha'], [class*='captcha'], .verification, .recaptcha")
+            await debug_log(update, "CAPTCHA or verification detected")
+            await update.message.reply_text("❌ CAPTCHA or verification required - manual intervention needed")
+            return
+        except:
+            await debug_log(update, "No CAPTCHA or verification detected")
+        
+        # Wait for page to be ready
+        await debug_log(update, "Waiting for page to be ready...")
+        WebDriverWait(driver, 15).until(
+            lambda driver: driver.execute_script("return document.readyState") == "complete"
+        )
+        await debug_log(update, "Page is ready")
+        
+        # Additional wait for any dynamic content
+        await asyncio.sleep(3)
+        
+        # Scroll down the page
+        driver.execute_script("window.scrollTo(0, 200);")
+        await debug_log(update, "Page scrolled down")
+        await asyncio.sleep(2)  # Wait for scroll to complete
+        
+        # Take screenshot before looking for dropdown
+        before_dropdown_screenshot = driver.get_screenshot_as_png()
+        before_dropdown_bio = io.BytesIO(before_dropdown_screenshot)
+        before_dropdown_bio.name = "06_before_dropdown.png"
+        await update.message.reply_photo(photo=before_dropdown_bio, caption="📸 Step 6: Before looking for dropdown")
 
-            await debug_log(update, "Looking for first dropdown...")
+        await debug_log(update, "Looking for first dropdown...")
             dropdown = WebDriverWait(driver, 30).until(
                 EC.element_to_be_clickable(
                     (By.CSS_SELECTOR,
@@ -227,11 +293,19 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     continue
             
             if not dropdown:
-                await debug_log(update, "All dropdown selectors failed - taking debug screenshot")
+                await debug_log(update, "All dropdown selectors failed")
+                
+                # Check what page we're actually on
+                current_url = driver.current_url
+                page_title = driver.title
+                await debug_log(update, f"Current URL: {current_url}")
+                await debug_log(update, f"Page title: {page_title}")
+                
+                # Take final debug screenshot
                 debug_screenshot = driver.get_screenshot_as_png()
                 debug_bio = io.BytesIO(debug_screenshot)
-                debug_bio.name = "dropdown_not_found.png"
-                await update.message.reply_photo(photo=debug_bio, caption="❌ Could not find dropdown after login")
+                debug_bio.name = "07_dropdown_not_found.png"
+                await update.message.reply_photo(photo=debug_bio, caption=f"❌ Could not find dropdown\nURL: {current_url}\nTitle: {page_title}")
                 return
         dropdown.click()
 
