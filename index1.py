@@ -16,12 +16,28 @@ from telegram import Update, Bot # Import Bot
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 # Constants
-MIN_DATE_THRESHOLD = "2025-12-01"  # Minimum acceptable date for reservations
+MIN_DATE_THRESHOLD = "2025-10-01"  # Minimum acceptable date for reservations
 
 # Read from environment variables
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 NUMBER1 = os.getenv("NUMBER1", "")
 NUMBER2 = os.getenv("NUMBER2", "")
+
+# Debug logging function
+async def debug_log(update, message, error=None):
+    """Send debug information to chat"""
+    try:
+        if error:
+            debug_message = f"🐛 DEBUG: {message}\n❌ Error: {str(error)}"
+        else:
+            debug_message = f"🐛 DEBUG: {message}"
+            
+        if update:
+            await update.message.reply_text(debug_message)
+        else:
+            print(f"[Scheduled Debug] {debug_message}")
+    except Exception:
+        print(f"Debug logging failed: {message}")
 
 # Define a placeholder for update and context for scheduled runs
 class ScheduledUpdate:
@@ -192,10 +208,11 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         try:
                             date_obj = datetime.strptime(aria_label, "%B %d, %Y")
                             if date_obj.date() < min_date_threshold.date():
-                                # Date is before threshold - skip without clicking
+                                await debug_log(update, f"Skipping date before threshold: {aria_label}")
                                 continue
-                        except (ValueError, AttributeError):
-                            # If we can't parse the date, skip it
+                            await debug_log(update, f"Date {aria_label} meets threshold, proceeding to click")
+                        except (ValueError, AttributeError) as e:
+                            await debug_log(update, f"Failed to parse date label: {aria_label}", e)
                             continue
                             
                         # Date meets threshold - proceed with click
@@ -214,8 +231,12 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 EC.presence_of_element_located((By.CSS_SELECTOR, 
                                     "body > div.wrapper > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register-search-history > form > div.table-box.scroller-block > table > tbody > tr > td:nth-child(2)"))
                             )
+                            await debug_log(update, f"Found reservation table for {aria_label}")
                         except TimeoutException:
-                            # Silently continue to next day without message
+                            await debug_log(update, f"No reservation slots available for {aria_label}")
+                            continue
+                        except Exception as e:
+                            await debug_log(update, f"Error finding reservation table for {aria_label}", e)
                             continue
                         
                         # Parse and combine date with hour_text
@@ -248,22 +269,29 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             continue
                         
                         # Parse the existing date
-                        datetime_str = f"{date_part} {time_part}"
-                        parsed_datetime = datetime.strptime(datetime_str, "%d-%m-%Y %H:%M")
-                        
-                        # Check if there's at least 6 hours difference
-                        time_difference = parsed_datetime - current_time
-                        hours_difference = time_difference.total_seconds() / 3600
-                        
-                        if hours_difference < 6:
-                            # Silently skip too soon times
+                        try:
+                            datetime_str = f"{date_part} {time_part}"
+                            parsed_datetime = datetime.strptime(datetime_str, "%d-%m-%Y %H:%M")
+                            
+                            # Check if there's at least 6 hours difference
+                            time_difference = parsed_datetime - current_time
+                            hours_difference = time_difference.total_seconds() / 3600
+                            
+                            if hours_difference < 6:
+                                await debug_log(update, f"Skipping too soon time: {datetime_str} (only {hours_difference:.1f}h away)")
+                                continue
+                            
+                            formatted_date = parsed_datetime.strftime("%Y-%m-%d %H:%M")
+                            print("Parsed datetime:", formatted_date)
+                            
+                            # Parse the combined (selected) date
+                            combined_datetime_obj = datetime.strptime(combined_datetime, "%H:%M%d-%m-%Y")
+                            
+                            await debug_log(update, f"Successfully parsed dates - Current: {datetime_str}, Selected: {combined_datetime}")
+                            
+                        except Exception as e:
+                            await debug_log(update, f"Date parsing failed for text: '{inner_text}', time_part: '{time_part}', date_part: '{date_part}'", e)
                             continue
-                        
-                        formatted_date = parsed_datetime.strftime("%Y-%m-%d %H:%M")
-                        print("Parsed datetime:", formatted_date)
-                        
-                        # Parse the combined (selected) date
-                        combined_datetime_obj = datetime.strptime(combined_datetime, "%H:%M%d-%m-%Y")
                         
                         screenshot = driver.get_screenshot_as_png()
                         bio = io.BytesIO(screenshot)
@@ -288,12 +316,18 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                     await update.message.reply_text(f"🟢 Found better date: {combined_datetime_text}")
                                     await update.message.reply_text("🔄 Canceling current reservation and booking better date...")
                                     
-                                    # Wait 5 seconds then click email field
-                                    await asyncio.sleep(2)
-                                    email_field = WebDriverWait(driver, 10).until(
-                                        EC.element_to_be_clickable((By.CSS_SELECTOR, "body > div.wrapper > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register > form > div:nth-child(6) > label"))
-                                    )
-                                    email_field.click()
+                                    # Wait 2 seconds then click email field
+                                    await asyncio.sleep(5)
+                                    try:
+                                        await debug_log(update, "Looking for email field...")
+                                        email_field = WebDriverWait(driver, 10).until(
+                                            EC.element_to_be_clickable((By.CSS_SELECTOR, "body > div.wrapper > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register > form > div:nth-child(6) > label"))
+                                        )
+                                        email_field.click()
+                                        await debug_log(update, "Email field clicked successfully")
+                                    except Exception as e:
+                                        await debug_log(update, "Failed to click email field", e)
+                                        return
                                     
                                     # Wait 1 second then type email
                                     await asyncio.sleep(1)
@@ -304,28 +338,38 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                                     # Wait 3 seconds then click button to cancel current reservation
                                     await asyncio.sleep(3)
-                                    button = WebDriverWait(driver, 10).until(
-                                        EC.element_to_be_clickable(
-                                            (By.CSS_SELECTOR, 
-                                             "body > div.wrapper > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register-search-history > form > div.table-box.scroller-block > table > tbody > tr > td.fs12 > button"
+                                    try:
+                                        await debug_log(update, "Looking for cancel button...")
+                                        button = WebDriverWait(driver, 10).until(
+                                            EC.element_to_be_clickable(
+                                                (By.CSS_SELECTOR, 
+                                                 "body > div.wrapper > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register-search-history > form > div.table-box.scroller-block > table > tbody > tr > td.fs12 > button"
+                                                )
                                             )
                                         )
-                                    )
-                                    button.click()
-                                    
-                                    # Wait 1 second then click detach-do button
-                                    await asyncio.sleep(1)
-                                    detach_button = WebDriverWait(driver, 10).until(
-                                        EC.element_to_be_clickable((By.CSS_SELECTOR, "#detach-do"))
-                                    )
-                                    detach_button.click()
+                                        button.click()
+                                        await debug_log(update, "Cancel button clicked successfully")
+                                        
+                                        # Wait 1 second then click detach-do button
+                                        await asyncio.sleep(1)
+                                        await debug_log(update, "Looking for detach button...")
+                                        detach_button = WebDriverWait(driver, 10).until(
+                                            EC.element_to_be_clickable((By.CSS_SELECTOR, "#detach-do"))
+                                        )
+                                        detach_button.click()
+                                        await debug_log(update, "Detach button clicked successfully")
 
-                                    # Wait 2 seconds then click vehicle-license-submit button to confirm new reservation
-                                    await asyncio.sleep(2)
-                                    submit_button = WebDriverWait(driver, 10).until(
-                                        EC.element_to_be_clickable((By.CSS_SELECTOR, "#vehicle-license-submit"))
-                                    )
-                                    submit_button.click()
+                                        # Wait 2 seconds then click vehicle-license-submit button to confirm new reservation
+                                        await asyncio.sleep(2)
+                                        await debug_log(update, "Looking for submit button...")
+                                        submit_button = WebDriverWait(driver, 10).until(
+                                            EC.element_to_be_clickable((By.CSS_SELECTOR, "#vehicle-license-submit"))
+                                        )
+                                        submit_button.click()
+                                        await debug_log(update, "Submit button clicked successfully")
+                                    except Exception as e:
+                                        await debug_log(update, "Failed during booking button sequence", e)
+                                        return
                                     
                                     await asyncio.sleep(5)
                                     # Take a screenshot after waiting and send status
@@ -355,42 +399,54 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 
                                 # Wait 5 seconds then click email field
                                 await asyncio.sleep(5)
-                                email_field = WebDriverWait(driver, 10).until(
-                                    EC.element_to_be_clickable((By.CSS_SELECTOR, "body > div.wrapper > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register > form > div:nth-child(6) > label"))
-                                )
-                                email_field.click()
-                                
-                                # Wait 1 second then type email
-                                await asyncio.sleep(1)
-                                active_element = driver.switch_to.active_element
-                                for digit in "mariahambardzumian@gmail.com":
-                                    active_element.send_keys(digit)
-                                    await asyncio.sleep(0.1)
+                                try:
+                                    await debug_log(update, "Looking for email field (invalid reservation case)...")
+                                    email_field = WebDriverWait(driver, 10).until(
+                                        EC.element_to_be_clickable((By.CSS_SELECTOR, "body > div.wrapper > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register > form > div:nth-child(6) > label"))
+                                    )
+                                    email_field.click()
+                                    await debug_log(update, "Email field clicked successfully (invalid reservation case)")
+                                    
+                                    # Wait 1 second then type email
+                                    await asyncio.sleep(1)
+                                    active_element = driver.switch_to.active_element
+                                    for digit in "mariahambardzumian@gmail.com":
+                                        active_element.send_keys(digit)
+                                        await asyncio.sleep(0.1)
 
-                                # Wait 3 seconds then click button to cancel current reservation
-                                await asyncio.sleep(3)
-                                button = WebDriverWait(driver, 10).until(
-                                    EC.element_to_be_clickable(
-                                        (By.CSS_SELECTOR, 
-                                         "body > div.wrapper > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register-search-history > form > div.table-box.scroller-block > table > tbody > tr > td.fs12 > button"
+                                    # Wait 3 seconds then click button to cancel current reservation
+                                    await asyncio.sleep(3)
+                                    await debug_log(update, "Looking for cancel button (invalid reservation case)...")
+                                    button = WebDriverWait(driver, 10).until(
+                                        EC.element_to_be_clickable(
+                                            (By.CSS_SELECTOR, 
+                                             "body > div.wrapper > main > div.info-section.info-section--without-cover.pr > div > div > div.info-section__group-item.pr.license-hqb-register-search-history > form > div.table-box.scroller-block > table > tbody > tr > td.fs12 > button"
+                                            )
                                         )
                                     )
-                                )
-                                button.click()
-                                
-                                # Wait 1 second then click detach-do button
-                                await asyncio.sleep(1)
-                                detach_button = WebDriverWait(driver, 10).until(
-                                    EC.element_to_be_clickable((By.CSS_SELECTOR, "#detach-do"))
-                                )
-                                detach_button.click()
+                                    button.click()
+                                    await debug_log(update, "Cancel button clicked successfully (invalid reservation case)")
+                                    
+                                    # Wait 1 second then click detach-do button
+                                    await asyncio.sleep(1)
+                                    await debug_log(update, "Looking for detach button (invalid reservation case)...")
+                                    detach_button = WebDriverWait(driver, 10).until(
+                                        EC.element_to_be_clickable((By.CSS_SELECTOR, "#detach-do"))
+                                    )
+                                    detach_button.click()
+                                    await debug_log(update, "Detach button clicked successfully (invalid reservation case)")
 
-                                # Wait 2 seconds then click vehicle-license-submit button to confirm new reservation
-                                await asyncio.sleep(2)
-                                submit_button = WebDriverWait(driver, 10).until(
-                                    EC.element_to_be_clickable((By.CSS_SELECTOR, "#vehicle-license-submit"))
-                                )
-                                submit_button.click()
+                                    # Wait 2 seconds then click vehicle-license-submit button to confirm new reservation
+                                    await asyncio.sleep(2)
+                                    await debug_log(update, "Looking for submit button (invalid reservation case)...")
+                                    submit_button = WebDriverWait(driver, 10).until(
+                                        EC.element_to_be_clickable((By.CSS_SELECTOR, "#vehicle-license-submit"))
+                                    )
+                                    submit_button.click()
+                                    await debug_log(update, "Submit button clicked successfully (invalid reservation case)")
+                                except Exception as e:
+                                    await debug_log(update, "Failed during booking sequence (invalid reservation case)", e)
+                                    return
                                 
                                 await asyncio.sleep(5)
                                 # Take a screenshot after waiting and send status
@@ -419,12 +475,16 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     break
 
-            except (TimeoutException, NoSuchElementException, StaleElementReferenceException):
+            except (TimeoutException, NoSuchElementException, StaleElementReferenceException) as e:
+                await debug_log(update, "Calendar/Day processing error", e)
                 if update:
                     await update.message.reply_text("Չհաջողվեց գտնել ազատ օր 😕")
                 else:
                     # This now uses the mocked reply_text method provided by ScheduledUpdate
                     await update.message.reply_text("[Scheduled] Չհաջողվեց գտնել ազատ օր 😕")
+                break
+            except Exception as e:
+                await debug_log(update, "Unexpected error in day processing loop", e)
                 break
 
         png_bytes = driver.get_screenshot_as_png()
@@ -439,7 +499,14 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
     except Exception as e:
-        error_message = f"Error occurred: {e}"
+        import traceback
+        full_traceback = traceback.format_exc()
+        
+        # Send detailed error info to chat
+        await debug_log(update, f"Main exception caught", e)
+        await debug_log(update, f"Traceback: {full_traceback}")
+        
+        error_message = f"❌ Bot encountered an error: {str(e)}"
         if update:
             await update.message.reply_text(error_message)
         else:
